@@ -20,7 +20,7 @@ export async function checkFileExists(token, path) {
 }
 
 export async function downloadCatalog(token) {
-  const path = '/Lex Bibliotheca/catalog.json'
+  const path = 'disk:/Lex Bibliotheca/catalog.json'
   // Get download URL
   const res = await fetch(
     `${BASE_URL}/v1/disk/resources/download?path=${encodeURIComponent(path)}`,
@@ -40,7 +40,7 @@ export async function downloadCatalog(token) {
 }
 
 export async function uploadCatalog(token, books) {
-  const path = '/Lex Bibliotheca/catalog.json'
+  const path = 'disk:/Lex Bibliotheca/catalog.json'
   // Step 1: Get upload URL from Yandex REST API
   let href
   try {
