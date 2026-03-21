@@ -138,7 +138,7 @@ function applyFiltersAndSort(books, searchQuery, filters) {
 export default function App() {
   const { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
   const {
-    books, syncStatus, lastSyncedAt, initialized,
+    books, syncStatus, syncError, lastSyncedAt, initialized,
     addBook, updateBook, deleteBook, forceSync,
     bulkAddBooks, exportToJSON, exportToCSV, importFromJSON,
   } = useLibrary(yadiskToken)
@@ -238,7 +238,7 @@ export default function App() {
           fontSize: '13px',
           color: '#e05050',
         }}>
-          <span>❌ Нет соединения с Яндекс.Диском — изменения не сохранены</span>
+          <span>❌ Нет соединения с Яндекс.Диском — изменения не сохранены{syncError ? `: ${syncError}` : ''}</span>
           <button
             onClick={() => setOfflineBanner(false)}
             style={{ background: 'none', border: 'none', color: '#e05050', cursor: 'pointer', fontSize: '16px' }}

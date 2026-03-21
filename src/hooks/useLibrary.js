@@ -6,6 +6,7 @@ import { SEED_BOOKS } from '../constants'
 export function useLibrary(token) {
   const [books, setBooks] = useState([])
   const [syncStatus, setSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'success' | 'error'
+  const [syncError, setSyncError] = useState('')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [initialized, setInitialized] = useState(false)
   const successTimerRef = useRef(null)
@@ -53,6 +54,7 @@ export function useLibrary(token) {
         console.error('Init load failed:', err)
         if (!cancelled) {
           setSyncStatus('error')
+          setSyncError(err.message || 'Неизвестная ошибка')
           setBooks(SEED_BOOKS)
         }
       } finally {
@@ -103,6 +105,7 @@ export function useLibrary(token) {
     } catch (err) {
       console.error('Sync failed:', err)
       setSyncStatus('error')
+      setSyncError(err.message || 'Неизвестная ошибка')
       return localBooks
     }
   }, [token, markSuccess])
@@ -220,6 +223,7 @@ export function useLibrary(token) {
   return {
     books,
     syncStatus,
+    syncError,
     lastSyncedAt,
     initialized,
     addBook,
