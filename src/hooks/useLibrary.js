@@ -3,6 +3,27 @@ import { v4 as uuidv4 } from 'uuid'
 import { checkFileExists, downloadCatalog, uploadCatalog, createFolder } from '../api/yandex'
 import { SEED_BOOKS } from '../constants'
 
+const LOCAL_KEY = 'lex-bibliotheca-catalog'
+
+function saveLocal(books) {
+  try {
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(books))
+  } catch (e) {
+    console.warn('localStorage save failed:', e)
+  }
+}
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY)
+    if (!raw) return null
+    const data = JSON.parse(raw)
+    return Array.isArray(data) ? data : null
+  } catch (e) {
+    return null
+  }
+}
+
 export function useLibrary(token) {
   const [books, setBooks] = useState([])
   const [syncStatus, setSyncStatus] = useState('idle') // 'idle' | 'syncing' | 'success' | 'error'
@@ -18,10 +39,11 @@ export function useLibrary(token) {
     successTimerRef.current = setTimeout(() => setSyncStatus('idle'), 2000)
   }, [])
 
-  // Initial load from Yandex.Disk
+  // Initial load: Yandex → localStorage → SEED_BOOKS
   useEffect(() => {
     if (!token) {
-      setBooks(SEED_BOOKS)
+      const local = loadLocal()
+      setBooks(local || SEED_BOOKS)
       setInitialized(true)
       return
     }
@@ -38,15 +60,28 @@ export function useLibrary(token) {
         if (exists) {
           const data = await downloadCatalog(token)
           if (!cancelled) {
-            setBooks(Array.isArray(data) ? data : SEED_BOOKS)
+            const cloudBooks = Array.isArray(data) ? data : null
+            if (cloudBooks) {
+              // Merge cloud with any local changes that happened while offline
+              const local = loadLocal()
+              const merged = local ? mergeBooks(local, cloudBooks) : cloudBooks
+              setBooks(merged)
+              saveLocal(merged)
+            } else {
+              const local = loadLocal()
+              setBooks(local || SEED_BOOKS)
+            }
             markSuccess()
           }
         } else {
-          // Create folder and upload seed books
+          // No cloud catalog yet — use local or seed, then try to upload
+          const local = loadLocal()
+          const initial = local || SEED_BOOKS
           await createFolder(token, '/Lex Bibliotheca')
-          await uploadCatalog(token, SEED_BOOKS)
+          await uploadCatalog(token, initial)
           if (!cancelled) {
-            setBooks(SEED_BOOKS)
+            setBooks(initial)
+            saveLocal(initial)
             markSuccess()
           }
         }
@@ -54,8 +89,10 @@ export function useLibrary(token) {
         console.error('Init load failed:', err)
         if (!cancelled) {
           setSyncStatus('error')
-          setSyncError(err.message || 'Неизвестная ошибка')
-          setBooks(SEED_BOOKS)
+          setSyncError('Нет соединения с Яндекс.Диском — работаем офлайн: ' + err.message)
+          // Fall back to localStorage
+          const local = loadLocal()
+          setBooks(local || SEED_BOOKS)
         }
       } finally {
         if (!cancelled) setInitialized(true)
@@ -87,7 +124,6 @@ export function useLibrary(token) {
     if (!token) return localBooks
     setSyncStatus('syncing')
     try {
-      // Re-fetch current remote state
       const catalogPath = '/Lex Bibliotheca/catalog.json'
       let remoteBooks = []
       const exists = await checkFileExists(token, catalogPath)
@@ -100,15 +136,25 @@ export function useLibrary(token) {
       const merged = mergeBooks(localBooks, remoteBooks)
       await uploadCatalog(token, merged)
       setBooks(merged)
+      saveLocal(merged)
       markSuccess()
       return merged
     } catch (err) {
       console.error('Sync failed:', err)
       setSyncStatus('error')
-      setSyncError(err.message || 'Неизвестная ошибка')
+      setSyncError('Нет соединения с Яндекс.Диском — изменения не сохранены: ' + err.message)
       return localBooks
     }
   }, [token, markSuccess])
+
+  // Save to localStorage on every books change (immediate local persistence)
+  const setAndSave = useCallback((updater) => {
+    setBooks(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      saveLocal(next)
+      return next
+    })
+  }, [])
 
   const addBook = useCallback(async (bookData) => {
     const newBook = {
@@ -128,30 +174,33 @@ export function useLibrary(token) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
-    setBooks(prev => {
-      const updated = [newBook, ...prev]
-      if (token) syncToCloud(updated)
+    let updated
+    setAndSave(prev => {
+      updated = [newBook, ...prev]
       return updated
     })
+    if (token) syncToCloud(updated || [newBook])
     return newBook
-  }, [token, syncToCloud])
+  }, [token, syncToCloud, setAndSave])
 
   const updateBook = useCallback(async (book) => {
     const updated = { ...book, updatedAt: new Date().toISOString() }
-    setBooks(prev => {
-      const newBooks = prev.map(b => b.id === updated.id ? updated : b)
-      if (token) syncToCloud(newBooks)
+    let newBooks
+    setAndSave(prev => {
+      newBooks = prev.map(b => b.id === updated.id ? updated : b)
       return newBooks
     })
-  }, [token, syncToCloud])
+    if (token) syncToCloud(newBooks || [])
+  }, [token, syncToCloud, setAndSave])
 
   const deleteBook = useCallback(async (id) => {
-    setBooks(prev => {
-      const newBooks = prev.filter(b => b.id !== id)
-      if (token) syncToCloud(newBooks)
+    let newBooks
+    setAndSave(prev => {
+      newBooks = prev.filter(b => b.id !== id)
       return newBooks
     })
-  }, [token, syncToCloud])
+    if (token) syncToCloud(newBooks || [])
+  }, [token, syncToCloud, setAndSave])
 
   const forceSync = useCallback(async () => {
     setBooks(prev => {
@@ -163,17 +212,18 @@ export function useLibrary(token) {
   const importFromJSON = useCallback((jsonData) => {
     try {
       const imported = Array.isArray(jsonData) ? jsonData : JSON.parse(jsonData)
-      setBooks(prev => {
-        const merged = mergeBooks(imported, prev)
-        if (token) syncToCloud(merged)
+      let merged
+      setAndSave(prev => {
+        merged = mergeBooks(imported, prev)
         return merged
       })
+      if (token) syncToCloud(merged || imported)
       return true
     } catch (err) {
       console.error('Import failed:', err)
       return false
     }
-  }, [token, syncToCloud])
+  }, [token, syncToCloud, setAndSave])
 
   const bulkAddBooks = useCallback(async (pdfFiles) => {
     const newBooks = pdfFiles.map(file => ({
@@ -193,16 +243,17 @@ export function useLibrary(token) {
       updatedAt: new Date().toISOString(),
     }))
     let addedCount = 0
-    setBooks(prev => {
+    let updated
+    setAndSave(prev => {
       const existingPaths = new Set(prev.map(b => b.yaPath).filter(Boolean))
       const toAdd = newBooks.filter(b => !existingPaths.has(b.yaPath))
       addedCount = toAdd.length
-      const updated = [...toAdd, ...prev]
-      if (token) syncToCloud(updated)
+      updated = [...toAdd, ...prev]
       return updated
     })
+    if (token) syncToCloud(updated || newBooks)
     return addedCount
-  }, [token, syncToCloud])
+  }, [token, syncToCloud, setAndSave])
 
   const exportToJSON = useCallback(() => {
     return JSON.stringify(books, null, 2)
