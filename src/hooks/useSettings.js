@@ -7,6 +7,9 @@ export function useSettings() {
   const [anthropicKey, setAnthropicKeyState] = useState(
     () => localStorage.getItem('lex_anthropic_key') || ''
   )
+  const [booksFolder, setBooksFolder] = useState(
+    () => localStorage.getItem('lex_books_folder') || 'disk:/'
+  )
 
   function setYadiskToken(value) {
     if (value) {
@@ -26,5 +29,14 @@ export function useSettings() {
     setAnthropicKeyState(value)
   }
 
-  return { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey }
+  function updateBooksFolder(value) {
+    if (value) {
+      localStorage.setItem('lex_books_folder', value)
+    } else {
+      localStorage.removeItem('lex_books_folder')
+    }
+    setBooksFolder(value || 'disk:/')
+  }
+
+  return { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder: updateBooksFolder }
 }

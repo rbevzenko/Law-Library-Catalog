@@ -63,7 +63,7 @@ function CheckGroup({ options, value, onChange, colorMap }) {
   )
 }
 
-export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey }) {
+export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, booksFolder }) {
   const [form, setForm] = useState(emptyBook)
   const [tagInput, setTagInput] = useState('')
   const [generating, setGenerating] = useState(false)
@@ -308,6 +308,7 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey })
           <YaDiskBrowser
             token={token}
             onSelect={path => set('yaPath', path)}
+            initialPath={booksFolder || 'disk:/'}
           />
         </div>
 

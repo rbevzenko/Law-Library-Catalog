@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Button } from '../ui/Button'
-import { getDiskInfo } from '../../api/yandex'
+import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
+import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
 
 function formatBytes(bytes) {
   if (!bytes) return '0 Б'
@@ -25,6 +26,9 @@ export function SettingsPanel({
   setYadiskToken,
   anthropicKey,
   setAnthropicKey,
+  booksFolder,
+  setBooksFolder,
+  bulkAddBooks,
   syncStatus,
   lastSyncedAt,
   forceSync,
@@ -34,9 +38,13 @@ export function SettingsPanel({
 }) {
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [keyInput, setKeyInput] = useState(anthropicKey || '')
+  const [folderInput, setFolderInput] = useState(booksFolder || 'disk:/')
   const [diskInfo, setDiskInfo] = useState(null)
   const [diskError, setDiskError] = useState('')
   const [checking, setChecking] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState(null) // { pdfs: [], importedCount: null }
+  const [scanError, setScanError] = useState('')
   const [importError, setImportError] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
   const [pendingFile, setPendingFile] = useState(null)
@@ -64,6 +72,34 @@ export function SettingsPanel({
 
   function handleSaveKey() {
     setAnthropicKey(keyInput.trim())
+  }
+
+  function handleSaveFolder() {
+    const val = folderInput.trim() || 'disk:/'
+    setBooksFolder(val)
+    setScanResult(null)
+  }
+
+  async function handleScanFolder() {
+    const folder = folderInput.trim() || booksFolder
+    if (!yadiskToken || !folder) return
+    setScanning(true)
+    setScanError('')
+    setScanResult(null)
+    try {
+      const pdfs = await fetchAllPDFs(yadiskToken, folder)
+      setScanResult({ pdfs, importedCount: null })
+    } catch (err) {
+      setScanError('Ошибка сканирования: ' + err.message)
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  async function handleImportFromFolder() {
+    if (!scanResult?.pdfs?.length) return
+    const count = await bulkAddBooks(scanResult.pdfs)
+    setScanResult(prev => ({ ...prev, importedCount: count }))
   }
 
   function handleFileChange(e) {
@@ -245,6 +281,89 @@ export function SettingsPanel({
               </span>
             </div>
           </section>
+
+          {/* Books Folder */}
+          {yadiskToken && (
+            <section>
+              <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
+                Папка с книгами
+              </h3>
+              <div style={{ marginBottom: '12px', fontSize: '13px', color: '#8899bb', lineHeight: 1.6 }}>
+                Укажите папку на Яндекс.Диске, где хранятся ваши PDF файлы. Можно просканировать её и автоматически добавить все книги в каталог.
+              </div>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#8899bb' }}>Путь к папке</label>
+                <input
+                  value={folderInput}
+                  onChange={e => setFolderInput(e.target.value)}
+                  placeholder="disk:/Мои книги"
+                  style={{
+                    width: '100%', padding: '10px 12px', background: '#1a2035',
+                    border: '1px solid #2a3050', borderRadius: '8px', color: '#e0d8c8',
+                    fontSize: '14px', fontFamily: 'JetBrains Mono, monospace', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <YaDiskBrowser
+                token={yadiskToken}
+                mode="folder"
+                initialPath={booksFolder}
+                onSelect={path => { setFolderInput(path) }}
+              />
+
+              <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                <Button variant="primary" size="sm" onClick={handleSaveFolder}>
+                  Сохранить папку
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleScanFolder}
+                  disabled={scanning || !yadiskToken}
+                >
+                  {scanning ? '⏳ Сканирование...' : '🔍 Сканировать папку'}
+                </Button>
+              </div>
+
+              {scanError && (
+                <div style={{ marginTop: '10px', padding: '10px 14px', background: 'rgba(200,50,50,0.1)', border: '1px solid rgba(200,50,50,0.3)', borderRadius: '8px', fontSize: '13px', color: '#e05050' }}>
+                  {scanError}
+                </div>
+              )}
+
+              {scanResult && (
+                <div style={{ marginTop: '12px', padding: '14px', background: 'rgba(58,122,80,0.08)', border: '1px solid rgba(58,122,80,0.25)', borderRadius: '8px' }}>
+                  {scanResult.importedCount !== null ? (
+                    <div style={{ fontSize: '13px', color: '#3a7a50', fontWeight: 600 }}>
+                      ✅ Добавлено {scanResult.importedCount} из {scanResult.pdfs.length} книг (уже существующие пропущены)
+                    </div>
+                  ) : scanResult.pdfs.length === 0 ? (
+                    <div style={{ fontSize: '13px', color: '#8899bb' }}>
+                      В папке не найдено PDF файлов
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '13px', color: '#e0d8c8', marginBottom: '10px' }}>
+                        Найдено <strong style={{ color: '#c8a850' }}>{scanResult.pdfs.length}</strong> PDF файлов:
+                      </div>
+                      <div style={{ maxHeight: '140px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {scanResult.pdfs.map(pdf => (
+                          <div key={pdf.path} style={{ fontSize: '12px', color: '#7aaad0', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            📄 {pdf.name}
+                          </div>
+                        ))}
+                      </div>
+                      <Button variant="primary" size="sm" onClick={handleImportFromFolder}>
+                        ⬇ Импортировать {scanResult.pdfs.length} книг в каталог
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Anthropic */}
           <section>

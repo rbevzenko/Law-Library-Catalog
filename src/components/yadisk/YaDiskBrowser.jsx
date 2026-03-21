@@ -14,12 +14,18 @@ function formatDate(str) {
   return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(str))
 }
 
-export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
+// mode='file' — select a PDF file (default)
+// mode='folder' — select a folder
+export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/', mode = 'file' }) {
   const [isOpen, setIsOpen] = useState(false)
   const [path, setPath] = useState(initialPath)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setPath(initialPath)
+  }, [initialPath])
 
   const load = useCallback(async (p) => {
     if (!token) return
@@ -27,11 +33,12 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
     setError('')
     try {
       const files = await fetchFiles(token, p)
-      // Show folders first, then PDFs only
       const sorted = [
         ...files.filter(f => f.type === 'dir').sort((a, b) => a.name.localeCompare(b.name)),
-        ...files.filter(f => f.type === 'file' && f.name.toLowerCase().endsWith('.pdf'))
-          .sort((a, b) => a.name.localeCompare(b.name)),
+        ...(mode === 'file'
+          ? files.filter(f => f.type === 'file' && f.name.toLowerCase().endsWith('.pdf'))
+              .sort((a, b) => a.name.localeCompare(b.name))
+          : []),
       ]
       setItems(sorted)
     } catch (err) {
@@ -39,7 +46,7 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, mode])
 
   useEffect(() => {
     if (isOpen) load(path)
@@ -50,7 +57,6 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
   }
 
   function buildBreadcrumbs() {
-    // path like "disk:/Lex Bibliotheca/folder"
     const parts = path.replace('disk:/', '').split('/').filter(Boolean)
     const crumbs = [{ label: '/', path: 'disk:/' }]
     let cur = 'disk:/'
@@ -63,19 +69,28 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
 
   const crumbs = buildBreadcrumbs()
 
-  function handleSelect(item) {
+  function handleItemClick(item) {
     if (item.type === 'dir') {
       navigateTo(item.path)
-    } else {
+    } else if (mode === 'file') {
       onSelect(item.path)
       setIsOpen(false)
     }
   }
 
+  function handleSelectFolder() {
+    onSelect(path)
+    setIsOpen(false)
+  }
+
+  const buttonLabel = mode === 'folder'
+    ? (isOpen ? 'Скрыть браузер папок' : '📁 Выбрать папку на Яндекс.Диске')
+    : (isOpen ? 'Скрыть браузер Яндекс.Диска' : '📁 Выбрать файл на Яндекс.Диске')
+
   if (!token) {
     return (
       <div style={{ fontSize: '13px', color: '#4a5a70', padding: '8px 0' }}>
-        Добавьте токен Яндекс.Диска в настройках, чтобы выбрать файл.
+        Добавьте токен Яндекс.Диска в настройках, чтобы выбрать {mode === 'folder' ? 'папку' : 'файл'}.
       </div>
     )
   }
@@ -87,7 +102,7 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
         size="sm"
         onClick={() => setIsOpen(o => !o)}
       >
-        📁 {isOpen ? 'Скрыть браузер Яндекс.Диска' : 'Выбрать файл на Яндекс.Диске'}
+        {buttonLabel}
       </Button>
 
       {isOpen && (
@@ -98,40 +113,63 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
           background: '#1a2035',
           overflow: 'hidden',
         }}>
-          {/* Breadcrumbs */}
+          {/* Breadcrumbs + folder select button */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '4px',
             padding: '10px 14px',
             borderBottom: '1px solid #2a3050',
-            overflowX: 'auto',
-            flexWrap: 'nowrap',
+            gap: '4px',
           }}>
-            {crumbs.map((c, i) => (
-              <React.Fragment key={c.path}>
-                {i > 0 && <span style={{ color: '#4a5a70', fontSize: '12px' }}>/</span>}
-                <button
-                  onClick={() => navigateTo(c.path)}
-                  style={{
-                    background: 'none', border: 'none',
-                    color: i === crumbs.length - 1 ? '#e0d8c8' : '#8899bb',
-                    cursor: 'pointer', fontSize: '13px',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    padding: '2px 4px', borderRadius: '4px',
-                    whiteSpace: 'nowrap',
-                    transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#c8a850'}
-                  onMouseLeave={e => e.currentTarget.style.color = i === crumbs.length - 1 ? '#e0d8c8' : '#8899bb'}
-                >
-                  {c.label}
-                </button>
-              </React.Fragment>
-            ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: 0, overflowX: 'auto' }}>
+              {crumbs.map((c, i) => (
+                <React.Fragment key={c.path}>
+                  {i > 0 && <span style={{ color: '#4a5a70', fontSize: '12px' }}>/</span>}
+                  <button
+                    onClick={() => navigateTo(c.path)}
+                    style={{
+                      background: 'none', border: 'none',
+                      color: i === crumbs.length - 1 ? '#e0d8c8' : '#8899bb',
+                      cursor: 'pointer', fontSize: '13px',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      padding: '2px 4px', borderRadius: '4px',
+                      whiteSpace: 'nowrap',
+                      transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#c8a850'}
+                    onMouseLeave={e => e.currentTarget.style.color = i === crumbs.length - 1 ? '#e0d8c8' : '#8899bb'}
+                  >
+                    {c.label}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+            {mode === 'folder' && (
+              <button
+                onClick={handleSelectFolder}
+                style={{
+                  flexShrink: 0,
+                  background: 'rgba(200,168,80,0.15)',
+                  border: '1px solid rgba(200,168,80,0.4)',
+                  color: '#c8a850',
+                  borderRadius: '6px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  fontFamily: 'system-ui',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap',
+                  marginLeft: '8px',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(200,168,80,0.25)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(200,168,80,0.15)' }}
+              >
+                ✓ Выбрать эту папку
+              </button>
+            )}
           </div>
 
-          {/* File list */}
+          {/* File/folder list */}
           <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
             {loading && (
               <div style={{ padding: '20px', textAlign: 'center', color: '#4a5a70', fontSize: '13px' }}>
@@ -143,23 +181,23 @@ export function YaDiskBrowser({ token, onSelect, initialPath = 'disk:/' }) {
             )}
             {!loading && !error && items.length === 0 && (
               <div style={{ padding: '20px', textAlign: 'center', color: '#4a5a70', fontSize: '13px' }}>
-                Папка пуста или нет PDF файлов
+                {mode === 'folder' ? 'Нет вложенных папок' : 'Папка пуста или нет PDF файлов'}
               </div>
             )}
             {!loading && items.map(item => (
               <div
                 key={item.path}
-                onClick={() => handleSelect(item)}
+                onClick={() => handleItemClick(item)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
                   padding: '10px 14px',
-                  cursor: 'pointer',
+                  cursor: item.type === 'dir' || mode === 'file' ? 'pointer' : 'default',
                   borderBottom: '1px solid #2a305040',
                   transition: 'background 0.1s ease',
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(200,168,80,0.06)'}
+                onMouseEnter={e => { if (item.type === 'dir' || mode === 'file') e.currentTarget.style.background = 'rgba(200,168,80,0.06)' }}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <span style={{ fontSize: '16px', flexShrink: 0 }}>
