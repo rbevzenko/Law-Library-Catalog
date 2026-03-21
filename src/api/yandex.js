@@ -8,15 +8,15 @@ function authHeaders(token) {
 }
 
 export async function checkFileExists(token, path) {
-  try {
-    const res = await fetch(
-      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}`,
-      { headers: authHeaders(token) }
-    )
-    return res.ok
-  } catch {
-    return false
-  }
+  const res = await fetch(
+    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}`,
+    { headers: authHeaders(token) }
+  )
+  if (res.status === 401) throw new Error('Токен недействителен (401). Проверьте OAuth-токен.')
+  if (res.status === 403) throw new Error('Нет доступа (403). Проверьте разрешения приложения.')
+  if (res.status === 404) return false
+  if (!res.ok) throw new Error(`Ошибка Яндекс.Диска: ${res.status}`)
+  return true
 }
 
 export async function downloadCatalog(token) {
