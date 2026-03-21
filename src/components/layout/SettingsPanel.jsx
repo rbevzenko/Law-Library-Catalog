@@ -11,6 +11,21 @@ function formatBytes(bytes) {
   return `${mb.toFixed(0)} МБ`
 }
 
+// Convert any Yandex Disk URL or path variant to API-compatible disk:/ path
+function normalizeYaDiskPath(input) {
+  const s = input.trim()
+  // Full web URL: https://disk.yandex.ru/client/disk/SomeName
+  const webMatch = s.match(/^https?:\/\/disk\.yandex\.ru\/client\/disk\/(.*)$/)
+  if (webMatch) {
+    return 'disk:/' + decodeURIComponent(webMatch[1])
+  }
+  // Already has disk:/ prefix
+  if (s.startsWith('disk:/')) return s
+  // Plain path without prefix
+  if (s.startsWith('/')) return 'disk:' + s
+  return s
+}
+
 function formatDate(date) {
   if (!date) return '—'
   return new Intl.DateTimeFormat('ru-RU', {
@@ -85,13 +100,14 @@ export function SettingsPanel({
   }
 
   function handleSaveFolder() {
-    const val = folderInput.trim() || 'disk:/'
+    const val = normalizeYaDiskPath(folderInput || 'disk:/')
+    setFolderInput(val)
     setBooksFolder(val)
     setScanResult(null)
   }
 
   async function handleScanFolder() {
-    const folder = folderInput.trim() || booksFolder
+    const folder = normalizeYaDiskPath(folderInput || booksFolder || 'disk:/')
     if (!yadiskToken || !folder) return
     setScanning(true)
     setScanError('')
