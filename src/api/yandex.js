@@ -108,7 +108,7 @@ export async function fetchFiles(token, path) {
   }))
 }
 
-export async function fetchAllPDFs(token, folderPath) {
+async function fetchAllPDFsRecursive(token, folderPath, results) {
   const res = await fetch(
     `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=500&sort=name`,
     { headers: authHeaders(token) }
@@ -118,13 +118,21 @@ export async function fetchAllPDFs(token, folderPath) {
   }
   const data = await res.json()
   const items = data._embedded?.items || []
-  return items
-    .filter(item => item.type === 'file' && item.name.toLowerCase().endsWith('.pdf'))
-    .map(item => ({
-      name: item.name,
-      path: item.path,
-      size: item.size || 0,
-    }))
+  const subfolders = []
+  for (const item of items) {
+    if (item.type === 'file' && item.name.toLowerCase().endsWith('.pdf')) {
+      results.push({ name: item.name, path: item.path, size: item.size || 0 })
+    } else if (item.type === 'dir') {
+      subfolders.push(item.path)
+    }
+  }
+  await Promise.all(subfolders.map(p => fetchAllPDFsRecursive(token, p, results)))
+}
+
+export async function fetchAllPDFs(token, folderPath) {
+  const results = []
+  await fetchAllPDFsRecursive(token, folderPath, results)
+  return results
 }
 
 export async function getDiskInfo(token) {
