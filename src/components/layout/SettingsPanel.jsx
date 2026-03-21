@@ -75,9 +75,9 @@ export function SettingsPanel({
     const id = clientIdInput.trim()
     if (!id) return
     localStorage.setItem('lex_ya_client_id', id)
-    const redirectUri = window.location.origin + window.location.pathname
+    const redirectUri = 'https://oauth.yandex.ru/verification_code'
     const url = `https://oauth.yandex.ru/authorize?response_type=token&client_id=${encodeURIComponent(id)}&redirect_uri=${encodeURIComponent(redirectUri)}`
-    window.location.href = url
+    window.open(url, '_blank', 'width=600,height=700')
   }
 
   function handleSaveKey() {
@@ -240,10 +240,7 @@ export function SettingsPanel({
                   oauth.yandex.ru
                 </a>
                 {' '}(права: <code style={{ fontFamily: 'monospace' }}>cloud_api:disk.read</code>, <code style={{ fontFamily: 'monospace' }}>cloud_api:disk.write</code>).
-                В настройках приложения добавьте Redirect URI:{' '}
-                <code style={{ fontFamily: 'monospace', fontSize: '11px', wordBreak: 'break-all', color: '#e0d8c8' }}>
-                  {window.location.origin + window.location.pathname}
-                </code>
+                Нажмите "Войти →" — откроется окно Яндекса, разрешите доступ. После этого Яндекс покажет токен — скопируйте его и вставьте в поле ниже.
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1 }}>
