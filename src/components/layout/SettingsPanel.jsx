@@ -39,6 +39,8 @@ export function SettingsPanel({
   onClose,
   yadiskToken,
   setYadiskToken,
+  githubToken,
+  setGithubToken,
   anthropicKey,
   setAnthropicKey,
   booksFolder,
@@ -52,6 +54,7 @@ export function SettingsPanel({
   importFromJSON,
 }) {
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
+  const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
   const [keyInput, setKeyInput] = useState(anthropicKey || '')
   const [folderInput, setFolderInput] = useState(booksFolder || 'disk:/')
@@ -84,6 +87,10 @@ export function SettingsPanel({
 
   function handleSaveToken() {
     setYadiskToken(tokenInput.trim())
+  }
+
+  function handleSaveGithubToken() {
+    setGithubToken(githubTokenInput.trim())
   }
 
   function handleOAuthLogin() {
@@ -213,6 +220,58 @@ export function SettingsPanel({
 
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
 
+          {/* GitHub Gist sync */}
+          <section>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
+              Синхронизация (GitHub Gist)
+            </h3>
+            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#8899bb', lineHeight: 1.7 }}>
+              Каталог хранится в приватном GitHub Gist — синхронизируется между устройствами.<br />
+              Создайте токен на{' '}
+              <a href="https://github.com/settings/tokens/new?scopes=gist&description=Lex+Bibliotheca" target="_blank" rel="noreferrer" style={{ color: '#c8a850' }}>
+                github.com/settings/tokens
+              </a>
+              {' '}(нужны права: <code style={{ fontFamily: 'monospace', color: '#e0d8c8' }}>gist</code>).
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#8899bb' }}>
+                GitHub Personal Access Token
+              </label>
+              <input
+                type="password"
+                value={githubTokenInput}
+                onChange={e => setGithubTokenInput(e.target.value)}
+                placeholder="ghp_..."
+                style={{
+                  width: '100%', padding: '10px 12px', background: '#1a2035',
+                  border: `1px solid ${githubToken ? 'rgba(58,122,80,0.5)' : '#2a3050'}`,
+                  borderRadius: '8px', color: '#e0d8c8',
+                  fontSize: '14px', fontFamily: 'JetBrains Mono, monospace', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button variant="primary" size="sm" onClick={handleSaveGithubToken}>
+                Сохранить
+              </Button>
+              {githubToken && (
+                <Button variant="secondary" size="sm" onClick={forceSync}>
+                  🔄 Синхронизировать сейчас
+                </Button>
+              )}
+              <span style={{ fontSize: '12px', color: githubToken ? '#3a7a50' : '#4a5a70' }}>
+                {githubToken
+                  ? (lastSyncedAt ? `✅ Обновлено: ${formatDate(lastSyncedAt)}` : '✅ Токен сохранён')
+                  : 'Токен не задан — только localStorage'}
+              </span>
+            </div>
+            {syncStatus === 'error' && (
+              <div style={{ marginTop: '10px', padding: '10px 14px', background: 'rgba(200,50,50,0.1)', border: '1px solid rgba(200,50,50,0.3)', borderRadius: '8px', fontSize: '13px', color: '#e05050' }}>
+                Ошибка синхронизации. Проверьте токен и повторите попытку.
+              </div>
+            )}
+          </section>
+
           {/* Welcome */}
           {!hasToken && (
             <div style={{
@@ -338,14 +397,6 @@ export function SettingsPanel({
               </div>
             )}
 
-            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Button variant="secondary" size="sm" onClick={forceSync}>
-                🔄 Синхронизировать сейчас
-              </Button>
-              <span style={{ fontSize: '12px', color: '#4a5a70' }}>
-                {lastSyncedAt ? `Обновлено: ${formatDate(lastSyncedAt)}` : 'Ещё не синхронизировано'}
-              </span>
-            </div>
           </section>
 
           {/* Books Folder */}

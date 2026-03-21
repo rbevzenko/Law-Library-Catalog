@@ -136,7 +136,7 @@ function applyFiltersAndSort(books, searchQuery, filters) {
 }
 
 export default function App() {
-  const { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
+  const { yadiskToken, setYadiskToken, githubToken, setGithubToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
 
   // Read OAuth token from URL hash after Yandex redirect
   useEffect(() => {
@@ -154,7 +154,7 @@ export default function App() {
     books, syncStatus, syncError, lastSyncedAt, initialized,
     addBook, updateBook, deleteBook, forceSync,
     bulkAddBooks, exportToJSON, exportToCSV, importFromJSON,
-  } = useLibrary(yadiskToken)
+  } = useLibrary(githubToken)
 
   const [view, setView] = useState('grid')
   const [searchQuery, setSearchQuery] = useState('')
@@ -251,7 +251,7 @@ export default function App() {
           fontSize: '13px',
           color: '#e05050',
         }}>
-          <span>❌ Нет соединения с Яндекс.Диском — изменения не сохранены{syncError ? `: ${syncError}` : ''}</span>
+          <span>❌ Ошибка синхронизации{syncError ? `: ${syncError}` : ''}</span>
           <button
             onClick={() => setOfflineBanner(false)}
             style={{ background: 'none', border: 'none', color: '#e05050', cursor: 'pointer', fontSize: '16px' }}
@@ -320,6 +320,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         yadiskToken={yadiskToken}
         setYadiskToken={setYadiskToken}
+        githubToken={githubToken}
+        setGithubToken={setGithubToken}
         anthropicKey={anthropicKey}
         setAnthropicKey={setAnthropicKey}
         booksFolder={booksFolder}
