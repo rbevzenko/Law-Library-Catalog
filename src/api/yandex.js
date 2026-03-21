@@ -1,17 +1,20 @@
 const BASE_URL = 'https://cloud-api.yandex.net'
 
 function authHeaders(token) {
-  return {
-    Authorization: `OAuth ${token}`,
-    'Content-Type': 'application/json',
-  }
+  return { Authorization: `OAuth ${token}` }
 }
 
+
 export async function checkFileExists(token, path) {
-  const res = await fetch(
-    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}`,
-    { headers: authHeaders(token) }
-  )
+  let res
+  try {
+    res = await fetch(
+      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}`,
+      { headers: authHeaders(token) }
+    )
+  } catch (e) {
+    throw new Error('checkFileExists: сеть/CORS: ' + e.message)
+  }
   if (res.status === 401) throw new Error('Токен недействителен (401). Проверьте OAuth-токен.')
   if (res.status === 403) throw new Error('Нет доступа (403). Проверьте разрешения приложения.')
   if (res.status === 404) return false
