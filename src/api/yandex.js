@@ -108,6 +108,25 @@ export async function fetchFiles(token, path) {
   }))
 }
 
+export async function fetchAllPDFs(token, folderPath) {
+  const res = await fetch(
+    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=500&sort=name`,
+    { headers: authHeaders(token) }
+  )
+  if (!res.ok) {
+    throw new Error(`Failed to list folder: ${res.status}`)
+  }
+  const data = await res.json()
+  const items = data._embedded?.items || []
+  return items
+    .filter(item => item.type === 'file' && item.name.toLowerCase().endsWith('.pdf'))
+    .map(item => ({
+      name: item.name,
+      path: item.path,
+      size: item.size || 0,
+    }))
+}
+
 export async function getDiskInfo(token) {
   const res = await fetch(`${BASE_URL}/v1/disk/`, {
     headers: authHeaders(token),

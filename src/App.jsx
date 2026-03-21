@@ -136,11 +136,11 @@ function applyFiltersAndSort(books, searchQuery, filters) {
 }
 
 export default function App() {
-  const { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey } = useSettings()
+  const { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
   const {
     books, syncStatus, lastSyncedAt, initialized,
     addBook, updateBook, deleteBook, forceSync,
-    exportToJSON, exportToCSV, importFromJSON,
+    bulkAddBooks, exportToJSON, exportToCSV, importFromJSON,
   } = useLibrary(yadiskToken)
 
   const [view, setView] = useState('grid')
@@ -309,6 +309,9 @@ export default function App() {
         setYadiskToken={setYadiskToken}
         anthropicKey={anthropicKey}
         setAnthropicKey={setAnthropicKey}
+        booksFolder={booksFolder}
+        setBooksFolder={setBooksFolder}
+        bulkAddBooks={bulkAddBooks}
         syncStatus={syncStatus}
         lastSyncedAt={lastSyncedAt}
         forceSync={forceSync}
@@ -325,6 +328,7 @@ export default function App() {
         onSave={handleSaveBook}
         token={yadiskToken}
         anthropicKey={anthropicKey}
+        booksFolder={booksFolder}
       />
 
       {/* PDF viewer */}

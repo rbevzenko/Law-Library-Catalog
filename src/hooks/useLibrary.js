@@ -172,6 +172,35 @@ export function useLibrary(token) {
     }
   }, [token, syncToCloud])
 
+  const bulkAddBooks = useCallback(async (pdfFiles) => {
+    const newBooks = pdfFiles.map(file => ({
+      id: uuidv4(),
+      title: file.name.replace(/\.pdf$/i, ''),
+      author: '',
+      year: new Date().getFullYear(),
+      legalOrder: [],
+      topics: [],
+      format: 'pdf',
+      rating: 0,
+      description: '',
+      tags: [],
+      notes: '',
+      yaPath: file.path,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }))
+    let addedCount = 0
+    setBooks(prev => {
+      const existingPaths = new Set(prev.map(b => b.yaPath).filter(Boolean))
+      const toAdd = newBooks.filter(b => !existingPaths.has(b.yaPath))
+      addedCount = toAdd.length
+      const updated = [...toAdd, ...prev]
+      if (token) syncToCloud(updated)
+      return updated
+    })
+    return addedCount
+  }, [token, syncToCloud])
+
   const exportToJSON = useCallback(() => {
     return JSON.stringify(books, null, 2)
   }, [books])
@@ -197,6 +226,7 @@ export function useLibrary(token) {
     updateBook,
     deleteBook,
     forceSync,
+    bulkAddBooks,
     importFromJSON,
     exportToJSON,
     exportToCSV,
