@@ -37,6 +37,7 @@ export function SettingsPanel({
   importFromJSON,
 }) {
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
+  const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
   const [keyInput, setKeyInput] = useState(anthropicKey || '')
   const [folderInput, setFolderInput] = useState(booksFolder || 'disk:/')
   const [diskInfo, setDiskInfo] = useState(null)
@@ -68,6 +69,15 @@ export function SettingsPanel({
 
   function handleSaveToken() {
     setYadiskToken(tokenInput.trim())
+  }
+
+  function handleOAuthLogin() {
+    const id = clientIdInput.trim()
+    if (!id) return
+    localStorage.setItem('lex_ya_client_id', id)
+    const redirectUri = window.location.origin + window.location.pathname
+    const url = `https://oauth.yandex.ru/authorize?response_type=token&client_id=${encodeURIComponent(id)}&redirect_uri=${encodeURIComponent(redirectUri)}`
+    window.location.href = url
   }
 
   function handleSaveKey() {
@@ -213,17 +223,60 @@ export function SettingsPanel({
               Яндекс.Диск
             </h3>
 
-            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#8899bb', lineHeight: 1.6 }}>
-              Для получения токена перейдите на{' '}
-              <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: '#c8a850' }}>
-                oauth.yandex.ru
-              </a>
-              , создайте приложение с правами <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}>cloud_api:disk.read</code> и{' '}
-              <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}>cloud_api:disk.write</code>, затем сгенерируйте токен.
+            {/* OAuth button */}
+            <div style={{
+              padding: '16px',
+              background: 'rgba(200,168,80,0.06)',
+              border: '1px solid rgba(200,168,80,0.2)',
+              borderRadius: '10px',
+              marginBottom: '16px',
+            }}>
+              <div style={{ fontSize: '13px', color: '#c8a850', fontWeight: 600, marginBottom: '10px' }}>
+                Войти через Яндекс (рекомендуется)
+              </div>
+              <div style={{ fontSize: '12px', color: '#8899bb', lineHeight: 1.6, marginBottom: '10px' }}>
+                Введите Client ID приложения с{' '}
+                <a href="https://oauth.yandex.ru" target="_blank" rel="noreferrer" style={{ color: '#c8a850' }}>
+                  oauth.yandex.ru
+                </a>
+                {' '}(права: <code style={{ fontFamily: 'monospace' }}>cloud_api:disk.read</code>, <code style={{ fontFamily: 'monospace' }}>cloud_api:disk.write</code>).
+                В настройках приложения добавьте Redirect URI:{' '}
+                <code style={{ fontFamily: 'monospace', fontSize: '11px', wordBreak: 'break-all', color: '#e0d8c8' }}>
+                  {window.location.origin + window.location.pathname}
+                </code>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <input
+                    value={clientIdInput}
+                    onChange={e => setClientIdInput(e.target.value)}
+                    placeholder="Client ID (напр. a1b2c3d4e5f6...)"
+                    style={{
+                      width: '100%', padding: '8px 10px', background: '#1a2035',
+                      border: '1px solid #2a3050', borderRadius: '6px', color: '#e0d8c8',
+                      fontSize: '13px', fontFamily: 'monospace', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleOAuthLogin}
+                  disabled={!clientIdInput.trim()}
+                  style={{
+                    padding: '8px 14px', background: clientIdInput.trim() ? '#c8a850' : '#2a3050',
+                    border: 'none', borderRadius: '6px', color: clientIdInput.trim() ? '#0f1220' : '#4a5a70',
+                    cursor: clientIdInput.trim() ? 'pointer' : 'not-allowed',
+                    fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                  }}
+                >
+                  Войти →
+                </button>
+              </div>
             </div>
 
             <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#8899bb' }}>OAuth токен</label>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#8899bb' }}>
+                Или вставьте токен вручную
+              </label>
               <input
                 type="password"
                 value={tokenInput}

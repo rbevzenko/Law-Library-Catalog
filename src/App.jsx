@@ -137,6 +137,19 @@ function applyFiltersAndSort(books, searchQuery, filters) {
 
 export default function App() {
   const { yadiskToken, setYadiskToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
+
+  // Read OAuth token from URL hash after Yandex redirect
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash.includes('access_token=')) {
+      const params = new URLSearchParams(hash.slice(1))
+      const token = params.get('access_token')
+      if (token) {
+        setYadiskToken(token)
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const {
     books, syncStatus, syncError, lastSyncedAt, initialized,
     addBook, updateBook, deleteBook, forceSync,
