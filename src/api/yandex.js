@@ -41,37 +41,48 @@ export async function downloadCatalog(token) {
 
 export async function uploadCatalog(token, books) {
   const path = '/Lex Bibliotheca/catalog.json'
-  // Get upload URL
-  const res = await fetch(
-    `${BASE_URL}/v1/disk/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
-    { headers: authHeaders(token) }
-  )
-  if (!res.ok) {
-    throw new Error(`Failed to get upload URL: ${res.status}`)
+  // Step 1: Get upload URL from Yandex REST API
+  let href
+  try {
+    const res = await fetch(
+      `${BASE_URL}/v1/disk/resources/upload?path=${encodeURIComponent(path)}&overwrite=true`,
+      { headers: authHeaders(token) }
+    )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+    href = json.href
+  } catch (e) {
+    throw new Error('Ошибка получения URL загрузки: ' + e.message)
   }
-  const { href } = await res.json()
-  // Upload the data
-  const uploadRes = await fetch(href, {
-    method: 'PUT',
-    body: JSON.stringify(books),
-  })
-  if (!uploadRes.ok) {
-    throw new Error(`Failed to upload catalog: ${uploadRes.status}`)
+  // Step 2: PUT data to storage URL
+  try {
+    const uploadRes = await fetch(href, {
+      method: 'PUT',
+      body: JSON.stringify(books),
+    })
+    if (!uploadRes.ok) throw new Error(`HTTP ${uploadRes.status}`)
+  } catch (e) {
+    throw new Error('Ошибка загрузки на сервер Яндекса: ' + e.message)
   }
   return true
 }
 
 export async function createFolder(token, path) {
-  const res = await fetch(
-    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}`,
-    {
-      method: 'PUT',
-      headers: authHeaders(token),
+  try {
+    const res = await fetch(
+      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}`,
+      {
+        method: 'PUT',
+        headers: authHeaders(token),
+      }
+    )
+    // 201 = created, 409 = already exists (both acceptable)
+    if (!res.ok && res.status !== 409) {
+      throw new Error(`HTTP ${res.status}`)
     }
-  )
-  // 201 = created, 409 = already exists (both acceptable)
-  if (!res.ok && res.status !== 409) {
-    throw new Error(`Failed to create folder: ${res.status}`)
+  } catch (e) {
+    if (e.message.includes('409')) return true
+    throw new Error('Ошибка создания папки: ' + e.message)
   }
   return true
 }
