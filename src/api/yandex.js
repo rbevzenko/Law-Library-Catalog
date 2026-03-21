@@ -54,7 +54,6 @@ export async function uploadCatalog(token, books) {
   const uploadRes = await fetch(href, {
     method: 'PUT',
     body: JSON.stringify(books),
-    headers: { 'Content-Type': 'application/json' },
   })
   if (!uploadRes.ok) {
     throw new Error(`Failed to upload catalog: ${uploadRes.status}`)
