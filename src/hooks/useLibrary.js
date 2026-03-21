@@ -72,7 +72,7 @@ export function useLibrary(token) {
     async function syncFromCloud() {
       setSyncStatus('syncing')
       try {
-        const catalogPath = '/Lex Bibliotheca/catalog.json'
+        const catalogPath = 'disk:/Lex Bibliotheca/catalog.json'
         const exists = await checkFileExists(token, catalogPath)
         if (cancelled) return
 
@@ -91,7 +91,7 @@ export function useLibrary(token) {
           // No cloud catalog yet — upload current local data
           const currentBooks = loadLocal() || SEED_BOOKS
           try {
-            await createFolder(token, '/Lex Bibliotheca')
+            await createFolder(token, 'disk:/Lex Bibliotheca')
           } catch (e) {
             // Folder may already exist (409) — continue
             if (!e.message.includes('409')) throw e
@@ -115,7 +115,7 @@ export function useLibrary(token) {
     if (!token) return
     setSyncStatus('syncing')
     try {
-      const catalogPath = '/Lex Bibliotheca/catalog.json'
+      const catalogPath = 'disk:/Lex Bibliotheca/catalog.json'
       let remoteBooks = []
       const exists = await checkFileExists(token, catalogPath)
       if (exists) {
@@ -123,7 +123,7 @@ export function useLibrary(token) {
         if (Array.isArray(data)) remoteBooks = data
       } else {
         try {
-          await createFolder(token, '/Lex Bibliotheca')
+          await createFolder(token, 'disk:/Lex Bibliotheca')
         } catch (e) {
           if (!e.message.includes('409')) throw e
         }
