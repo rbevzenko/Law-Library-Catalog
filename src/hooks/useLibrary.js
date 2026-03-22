@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { downloadCatalogFromGist, uploadCatalogToGist } from '../api/github'
-import { SEED_BOOKS } from '../constants'
-
 const LOCAL_KEY = 'lex-bibliotheca-catalog'
 
 function saveLocal(books) {
@@ -42,7 +40,7 @@ function mergeBooks(a, b) {
 }
 
 export function useLibrary(githubToken) {
-  const [books, setBooks] = useState(() => loadLocal() || SEED_BOOKS)
+  const [books, setBooks] = useState(() => loadLocal() || [])
   const [syncStatus, setSyncStatus] = useState('idle')
   const [syncError, setSyncError] = useState('')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
