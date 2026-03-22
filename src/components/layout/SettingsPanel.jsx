@@ -109,17 +109,22 @@ export function SettingsPanel({
   }
 
   function handleSaveFolder() {
-    const val = normalizeYaDiskPath(folderInput || 'disk:/')
+    const val = normalizeYaDiskPath(folderInput.trim())
+    if (!val || val === 'disk:/') {
+      setScanError('Укажите конкретную папку (например: disk:/Мои книги)')
+      return
+    }
     setFolderInput(val)
     setBooksFolder(val)
     setScanResult(null)
+    setScanError('')
   }
 
   async function handleScanFolder() {
-    const folder = normalizeYaDiskPath(folderInput || booksFolder || '')
+    const folder = normalizeYaDiskPath(folderInput.trim() || booksFolder || '')
     if (!yadiskToken) return
-    if (!folder) {
-      setScanError('Укажите папку для сканирования (например: disk:/Мои книги)')
+    if (!folder || folder === 'disk:/') {
+      setScanError('Укажите конкретную папку для сканирования (например: disk:/Мои книги)')
       return
     }
     setScanning(true)
