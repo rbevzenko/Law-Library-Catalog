@@ -122,12 +122,19 @@ export async function fetchFiles(token, path) {
 }
 
 async function fetchAllPDFsRecursive(token, folderPath, results) {
-  const res = await fetch(
-    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=500&sort=name`,
-    { headers: authHeaders(token) }
-  )
+  let res
+  try {
+    res = await fetch(
+      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=500`,
+      { headers: authHeaders(token) }
+    )
+  } catch (e) {
+    // Network/CORS error for this folder — skip it
+    return
+  }
   if (!res.ok) {
-    throw new Error(`Failed to list folder: ${res.status}`)
+    // Inaccessible folder (403, 404, etc.) — skip it
+    return
   }
   const data = await res.json()
   const items = data._embedded?.items || []
@@ -139,10 +146,28 @@ async function fetchAllPDFsRecursive(token, folderPath, results) {
       subfolders.push(item.path)
     }
   }
-  await Promise.all(subfolders.map(p => fetchAllPDFsRecursive(token, p, results)))
+  // Process subfolders sequentially to avoid rate limiting
+  for (const p of subfolders) {
+    await fetchAllPDFsRecursive(token, p, results)
+  }
 }
 
 export async function fetchAllPDFs(token, folderPath) {
+  // Verify the root folder is accessible before scanning
+  let rootRes
+  try {
+    rootRes = await fetch(
+      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=1`,
+      { headers: authHeaders(token) }
+    )
+  } catch (e) {
+    throw new Error('Нет доступа к Яндекс.Диску (сеть/CORS). Проверьте токен и подключение.')
+  }
+  if (rootRes.status === 401) throw new Error('Токен недействителен (401). Обновите OAuth-токен.')
+  if (rootRes.status === 403) throw new Error('Нет доступа к папке (403). Проверьте права приложения.')
+  if (rootRes.status === 404) throw new Error(`Папка не найдена: ${folderPath}`)
+  if (!rootRes.ok) throw new Error(`Ошибка Яндекс.Диска: ${rootRes.status}`)
+
   const results = []
   await fetchAllPDFsRecursive(token, folderPath, results)
   return results
