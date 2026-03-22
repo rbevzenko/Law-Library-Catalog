@@ -211,6 +211,12 @@ export function useLibrary(githubToken) {
     return addedCount
   }, [githubToken, syncToCloud])
 
+  const clearAllBooks = useCallback(() => {
+    setBooks([])
+    localStorage.removeItem(LOCAL_KEY)
+    if (githubToken) syncToCloud([])
+  }, [githubToken, syncToCloud])
+
   const exportToJSON = useCallback(() => {
     return JSON.stringify(books, null, 2)
   }, [books])
@@ -238,6 +244,7 @@ export function useLibrary(githubToken) {
     deleteBook,
     forceSync,
     bulkAddBooks,
+    clearAllBooks,
     importFromJSON,
     exportToJSON,
     exportToCSV,

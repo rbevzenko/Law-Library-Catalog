@@ -46,6 +46,7 @@ export function SettingsPanel({
   booksFolder,
   setBooksFolder,
   bulkAddBooks,
+  clearAllBooks,
   syncStatus,
   lastSyncedAt,
   forceSync,
@@ -66,6 +67,7 @@ export function SettingsPanel({
   const [scanError, setScanError] = useState('')
   const [importError, setImportError] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [pendingFile, setPendingFile] = useState(null)
   const fileInputRef = useRef()
 
@@ -547,10 +549,43 @@ export function SettingsPanel({
               {importError && (
                 <div style={{ color: '#e05050', fontSize: '13px' }}>{importError}</div>
               )}
+              <Button variant="danger" size="sm" onClick={() => setShowClearConfirm(true)}>
+                🗑 Очистить весь каталог
+              </Button>
             </div>
           </section>
         </div>
       </div>
+
+      {/* Clear catalog confirm dialog */}
+      {showClearConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(10,14,30,0.85)', backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            background: '#1a2035', border: '1px solid #2a3050',
+            borderRadius: '12px', padding: '28px', maxWidth: '380px', width: '90%',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+          }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', fontFamily: "'Cormorant Garamond', serif", color: '#e0d8c8' }}>
+              Очистить каталог?
+            </h3>
+            <p style={{ margin: '0 0 20px 0', color: '#8899bb', fontSize: '14px', lineHeight: 1.6 }}>
+              Все книги будут удалены безвозвратно. Рекомендуется сначала сделать резервную копию (JSON).
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Button variant="danger" size="md" onClick={() => { clearAllBooks(); setShowClearConfirm(false) }}>
+                Удалить всё
+              </Button>
+              <Button variant="secondary" size="md" onClick={() => setShowClearConfirm(false)}>
+                Отмена
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm dialog */}
       {showConfirm && (
