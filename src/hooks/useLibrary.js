@@ -198,7 +198,11 @@ export function useLibrary(githubToken) {
     let updated
     setBooks(prev => {
       const existingPaths = new Set(prev.map(b => b.yaPath).filter(Boolean))
-      const toAdd = newBooks.filter(b => !existingPaths.has(b.yaPath))
+      const existingTitles = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      const toAdd = newBooks.filter(b =>
+        !existingPaths.has(b.yaPath) &&
+        !existingTitles.has(b.title.trim().toLowerCase())
+      )
       addedCount = toAdd.length
       updated = [...toAdd, ...prev]
       return updated

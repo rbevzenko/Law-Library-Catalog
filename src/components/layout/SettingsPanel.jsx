@@ -57,7 +57,7 @@ export function SettingsPanel({
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
   const [keyInput, setKeyInput] = useState(anthropicKey || '')
-  const [folderInput, setFolderInput] = useState(booksFolder || 'disk:/')
+  const [folderInput, setFolderInput] = useState(booksFolder || '')
   const [diskInfo, setDiskInfo] = useState(null)
   const [diskError, setDiskError] = useState('')
   const [checking, setChecking] = useState(false)
@@ -114,8 +114,12 @@ export function SettingsPanel({
   }
 
   async function handleScanFolder() {
-    const folder = normalizeYaDiskPath(folderInput || booksFolder || 'disk:/')
-    if (!yadiskToken || !folder) return
+    const folder = normalizeYaDiskPath(folderInput || booksFolder || '')
+    if (!yadiskToken) return
+    if (!folder) {
+      setScanError('Укажите папку для сканирования (например: disk:/Мои книги)')
+      return
+    }
     setScanning(true)
     setScanError('')
     setScanResult(null)

@@ -11,7 +11,7 @@ export function useSettings() {
     () => localStorage.getItem('lex_anthropic_key') || ''
   )
   const [booksFolder, setBooksFolder] = useState(
-    () => localStorage.getItem('lex_books_folder') || 'disk:/'
+    () => localStorage.getItem('lex_books_folder') || ''
   )
 
   function setYadiskToken(value) {
@@ -35,7 +35,7 @@ export function useSettings() {
   function updateBooksFolder(value) {
     if (value) localStorage.setItem('lex_books_folder', value)
     else localStorage.removeItem('lex_books_folder')
-    setBooksFolder(value || 'disk:/')
+    setBooksFolder(value || '')
   }
 
   return {
