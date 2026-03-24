@@ -102,6 +102,34 @@ export async function getDownloadUrl(token, path) {
   return href
 }
 
+export async function getPublicUrl(token, path) {
+  // Check if already published
+  const infoRes = await fetch(
+    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}&fields=public_url`,
+    { headers: authHeaders(token) }
+  )
+  if (!infoRes.ok) throw new Error(`Ошибка получения информации о файле: ${infoRes.status}`)
+  const info = await infoRes.json()
+  if (info.public_url) return info.public_url
+
+  // Publish the file to get a public URL
+  const pubRes = await fetch(
+    `${BASE_URL}/v1/disk/resources/publish?path=${encodeURIComponent(path)}`,
+    { method: 'PUT', headers: authHeaders(token) }
+  )
+  if (!pubRes.ok) throw new Error(`Ошибка публикации файла: ${pubRes.status}`)
+
+  // Fetch updated info with public_url
+  const updatedRes = await fetch(
+    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}&fields=public_url`,
+    { headers: authHeaders(token) }
+  )
+  if (!updatedRes.ok) throw new Error(`Ошибка получения публичной ссылки: ${updatedRes.status}`)
+  const updated = await updatedRes.json()
+  if (!updated.public_url) throw new Error('Публичная ссылка не получена')
+  return updated.public_url
+}
+
 export async function fetchFiles(token, path) {
   const res = await fetch(
     `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}&limit=100`,

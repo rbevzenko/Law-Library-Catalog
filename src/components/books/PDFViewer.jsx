@@ -1,7 +1,17 @@
-import React, { useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
+import { getPublicUrl } from '../../api/yandex'
 import { Button } from '../ui/Button'
 
-export function PDFViewer({ isOpen, onClose, yaPath }) {
+export function PDFViewer({ isOpen, onClose, yaPath, token }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!isOpen) return
+    setError('')
+    setLoading(false)
+  }, [isOpen, yaPath])
+
   useEffect(() => {
     if (!isOpen) return
     const handleKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -10,10 +20,23 @@ export function PDFViewer({ isOpen, onClose, yaPath }) {
   }, [isOpen, onClose])
 
   function handleOpen() {
-    if (!yaPath) return
-    // Convert disk:/path/to/file.pdf → https://disk.yandex.ru/client/disk/path/to/file.pdf
-    const path = yaPath.startsWith('disk:') ? yaPath.slice(5) : yaPath
-    window.open('https://disk.yandex.ru/client/disk' + path, '_blank')
+    if (!token || !yaPath) return
+    setLoading(true)
+    setError('')
+    // Open blank window immediately on user gesture to avoid popup blocker
+    const win = window.open('', '_blank')
+    if (!win) {
+      setError('Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для этого сайта.')
+      setLoading(false)
+      return
+    }
+    getPublicUrl(token, yaPath)
+      .then(url => { win.location.href = url })
+      .catch(err => {
+        win.close()
+        setError('Не удалось открыть PDF: ' + err.message)
+      })
+      .finally(() => setLoading(false))
   }
 
   if (!isOpen) return null
@@ -91,12 +114,28 @@ export function PDFViewer({ isOpen, onClose, yaPath }) {
           </div>
         </div>
 
-        <Button variant="primary" size="lg" onClick={handleOpen}>
-          🔗 Открыть в Яндекс Диске
+        {error && (
+          <div style={{
+            color: '#e05050',
+            fontSize: '14px',
+            textAlign: 'center',
+            maxWidth: '400px',
+          }}>
+            ❌ {error}
+          </div>
+        )}
+
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={handleOpen}
+          disabled={loading}
+        >
+          {loading ? '⏳ Открываем...' : '🔗 Открыть PDF'}
         </Button>
 
         <div style={{ color: '#445577', fontSize: '12px', textAlign: 'center' }}>
-          Файл откроется в web-интерфейсе Яндекс Диска
+          Файл откроется в просмотрщике Яндекс Диска
         </div>
       </div>
     </div>
