@@ -3,20 +3,14 @@ import { getDownloadUrl } from '../../api/yandex'
 import { Button } from '../ui/Button'
 
 export function PDFViewer({ isOpen, onClose, yaPath, token }) {
-  const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!isOpen || !yaPath || !token) return
-    setLoading(true)
+    if (!isOpen) return
     setError('')
-    setUrl('')
-    getDownloadUrl(token, yaPath)
-      .then(href => setUrl(href))
-      .catch(err => setError('Не удалось получить ссылку: ' + err.message))
-      .finally(() => setLoading(false))
-  }, [isOpen, yaPath, token])
+    setLoading(false)
+  }, [isOpen, yaPath])
 
   useEffect(() => {
     if (!isOpen) return
@@ -25,7 +19,36 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
     return () => document.removeEventListener('keydown', handleKey)
   }, [isOpen, onClose])
 
+  async function handleOpen() {
+    if (!token || !yaPath) return
+    setLoading(true)
+    setError('')
+    // Open window immediately on user gesture to bypass popup blocker
+    const win = window.open('', '_blank')
+    if (!win) {
+      setError('Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для этого сайта.')
+      setLoading(false)
+      return
+    }
+    try {
+      const href = await getDownloadUrl(token, yaPath)
+      // Fetch file content as blob (same pattern as downloadCatalog)
+      const response = await fetch(href)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      win.location.href = objectUrl
+    } catch (err) {
+      win.close()
+      setError('Не удалось открыть PDF: ' + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (!isOpen) return null
+
+  const fileName = yaPath ? yaPath.split('/').pop() : ''
 
   return (
     <div style={{
@@ -60,11 +83,6 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
           📄 {yaPath}
         </div>
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          {url && (
-            <Button variant="secondary" size="sm" onClick={() => window.open(url, '_blank')}>
-              🔗 Открыть в браузере
-            </Button>
-          )}
           <Button variant="ghost" size="sm" onClick={onClose}>
             ✕ Закрыть
           </Button>
@@ -72,23 +90,66 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-        {loading && (
-          <div style={{ color: '#8899bb', fontSize: '16px' }}>⏳ Загрузка PDF...</div>
-        )}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '24px',
+        padding: '40px',
+      }}>
+        <div style={{
+          fontSize: '64px',
+          lineHeight: 1,
+        }}>📄</div>
+
+        <div style={{
+          textAlign: 'center',
+          maxWidth: '480px',
+        }}>
+          <div style={{
+            color: '#ccd6f6',
+            fontSize: '18px',
+            fontWeight: 600,
+            marginBottom: '8px',
+            wordBreak: 'break-word',
+          }}>
+            {fileName}
+          </div>
+          <div style={{
+            color: '#5566aa',
+            fontSize: '13px',
+            fontFamily: 'JetBrains Mono, monospace',
+            wordBreak: 'break-all',
+          }}>
+            {yaPath}
+          </div>
+        </div>
+
         {error && (
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <div style={{ color: '#e05050', marginBottom: '16px', fontSize: '15px' }}>❌ {error}</div>
-            <Button variant="secondary" size="md" onClick={onClose}>Закрыть</Button>
+          <div style={{
+            color: '#e05050',
+            fontSize: '14px',
+            textAlign: 'center',
+            maxWidth: '400px',
+          }}>
+            ❌ {error}
           </div>
         )}
-        {url && !loading && (
-          <iframe
-            src={url}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            title="PDF Viewer"
-          />
-        )}
+
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={handleOpen}
+          disabled={loading}
+        >
+          {loading ? '⏳ Получение ссылки...' : '🔗 Открыть PDF'}
+        </Button>
+
+        <div style={{ color: '#445577', fontSize: '12px', textAlign: 'center' }}>
+          Файл откроется в новой вкладке браузера
+        </div>
       </div>
     </div>
   )
