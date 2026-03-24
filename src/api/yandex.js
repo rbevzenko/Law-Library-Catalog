@@ -122,30 +122,42 @@ export async function fetchFiles(token, path) {
 }
 
 async function fetchAllPDFsRecursive(token, folderPath, results) {
-  let res
-  try {
-    res = await fetch(
-      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=500`,
-      { headers: authHeaders(token) }
-    )
-  } catch (e) {
-    // Network/CORS error for this folder — skip it
-    return
-  }
-  if (!res.ok) {
-    // Inaccessible folder (403, 404, etc.) — skip it
-    return
-  }
-  const data = await res.json()
-  const items = data._embedded?.items || []
+  const PAGE_SIZE = 100
   const subfolders = []
-  for (const item of items) {
-    if (item.type === 'file' && item.name.toLowerCase().endsWith('.pdf')) {
-      results.push({ name: item.name, path: item.path, size: item.size || 0 })
-    } else if (item.type === 'dir') {
-      subfolders.push(item.path)
+  let offset = 0
+
+  while (true) {
+    let res
+    try {
+      res = await fetch(
+        `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(folderPath)}&limit=${PAGE_SIZE}&offset=${offset}`,
+        { headers: authHeaders(token) }
+      )
+    } catch (e) {
+      // Network/CORS error for this folder — skip it
+      return
     }
+    if (!res.ok) {
+      // Inaccessible folder (403, 404, etc.) — skip it
+      return
+    }
+    const data = await res.json()
+    const embedded = data._embedded || {}
+    const items = embedded.items || []
+
+    for (const item of items) {
+      if (item.type === 'file' && item.name.toLowerCase().endsWith('.pdf')) {
+        results.push({ name: item.name, path: item.path, size: item.size || 0 })
+      } else if (item.type === 'dir') {
+        subfolders.push(item.path)
+      }
+    }
+
+    const total = embedded.total ?? items.length
+    offset += items.length
+    if (offset >= total || items.length === 0) break
   }
+
   // Process subfolders sequentially to avoid rate limiting
   for (const p of subfolders) {
     await fetchAllPDFsRecursive(token, p, results)
