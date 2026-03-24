@@ -23,11 +23,24 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
     if (!token || !yaPath) return
     setLoading(true)
     setError('')
+    // Open window immediately on user gesture to bypass popup blocker
+    const win = window.open('', '_blank')
+    if (!win) {
+      setError('Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для этого сайта.')
+      setLoading(false)
+      return
+    }
     try {
       const href = await getDownloadUrl(token, yaPath)
-      window.open(href, '_blank')
+      // Fetch file content as blob (same pattern as downloadCatalog)
+      const response = await fetch(href)
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      win.location.href = objectUrl
     } catch (err) {
-      setError('Не удалось получить ссылку: ' + err.message)
+      win.close()
+      setError('Не удалось открыть PDF: ' + err.message)
     } finally {
       setLoading(false)
     }
