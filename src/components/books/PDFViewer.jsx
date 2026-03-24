@@ -1,17 +1,7 @@
-import React, { useState, useEffect } from 'react'
-import { getDownloadUrl } from '../../api/yandex'
+import React, { useEffect } from 'react'
 import { Button } from '../ui/Button'
 
-export function PDFViewer({ isOpen, onClose, yaPath, token }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!isOpen) return
-    setError('')
-    setLoading(false)
-  }, [isOpen, yaPath])
-
+export function PDFViewer({ isOpen, onClose, yaPath }) {
   useEffect(() => {
     if (!isOpen) return
     const handleKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -19,31 +9,11 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
     return () => document.removeEventListener('keydown', handleKey)
   }, [isOpen, onClose])
 
-  async function handleOpen() {
-    if (!token || !yaPath) return
-    setLoading(true)
-    setError('')
-    // Open window immediately on user gesture to bypass popup blocker
-    const win = window.open('', '_blank')
-    if (!win) {
-      setError('Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для этого сайта.')
-      setLoading(false)
-      return
-    }
-    try {
-      const href = await getDownloadUrl(token, yaPath)
-      // Fetch file content as blob (same pattern as downloadCatalog)
-      const response = await fetch(href)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const blob = await response.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      win.location.href = objectUrl
-    } catch (err) {
-      win.close()
-      setError('Не удалось открыть PDF: ' + err.message)
-    } finally {
-      setLoading(false)
-    }
+  function handleOpen() {
+    if (!yaPath) return
+    // Convert disk:/path/to/file.pdf → https://disk.yandex.ru/client/disk/path/to/file.pdf
+    const path = yaPath.startsWith('disk:') ? yaPath.slice(5) : yaPath
+    window.open('https://disk.yandex.ru/client/disk' + path, '_blank')
   }
 
   if (!isOpen) return null
@@ -99,15 +69,9 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
         gap: '24px',
         padding: '40px',
       }}>
-        <div style={{
-          fontSize: '64px',
-          lineHeight: 1,
-        }}>📄</div>
+        <div style={{ fontSize: '64px', lineHeight: 1 }}>📄</div>
 
-        <div style={{
-          textAlign: 'center',
-          maxWidth: '480px',
-        }}>
+        <div style={{ textAlign: 'center', maxWidth: '480px' }}>
           <div style={{
             color: '#ccd6f6',
             fontSize: '18px',
@@ -127,28 +91,12 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
           </div>
         </div>
 
-        {error && (
-          <div style={{
-            color: '#e05050',
-            fontSize: '14px',
-            textAlign: 'center',
-            maxWidth: '400px',
-          }}>
-            ❌ {error}
-          </div>
-        )}
-
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={handleOpen}
-          disabled={loading}
-        >
-          {loading ? '⏳ Получение ссылки...' : '🔗 Открыть PDF'}
+        <Button variant="primary" size="lg" onClick={handleOpen}>
+          🔗 Открыть в Яндекс Диске
         </Button>
 
         <div style={{ color: '#445577', fontSize: '12px', textAlign: 'center' }}>
-          Файл откроется в новой вкладке браузера
+          Файл откроется в web-интерфейсе Яндекс Диска
         </div>
       </div>
     </div>
