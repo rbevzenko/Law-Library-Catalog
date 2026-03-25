@@ -53,6 +53,7 @@ export function SettingsPanel({
   bulkUpdateBooks,
   fixYearsFromRegex,
   fixCorruptedTitles,
+  removeDuplicates,
   clearAllBooks,
   syncStatus,
   lastSyncedAt,
@@ -67,6 +68,7 @@ export function SettingsPanel({
     yearAI:   { progress: null, result: null, error: '' },
   })
   const [yearRegexResult, setYearRegexResult] = useState(null)
+  const [dedupResult, setDedupResult] = useState(null)
   const [csvModalOpen, setCsvModalOpen] = useState(false)
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
@@ -738,6 +740,19 @@ export function SettingsPanel({
               />
               {importError && (
                 <div style={{ color: '#e05050', fontSize: '13px' }}>{importError}</div>
+              )}
+              <Button variant="secondary" size="sm" onClick={() => {
+                const removed = removeDuplicates()
+                setDedupResult(removed)
+              }}>
+                🔍 Исключить дублирование
+              </Button>
+              {dedupResult !== null && (
+                <div style={{ fontSize: '13px', color: dedupResult > 0 ? '#c8a850' : '#4a7a50' }}>
+                  {dedupResult > 0
+                    ? `Удалено ${dedupResult} дубл${dedupResult === 1 ? 'икат' : dedupResult < 5 ? 'иката' : 'икатов'}`
+                    : 'Дубликаты не найдены'}
+                </div>
               )}
               <Button variant="danger" size="sm" onClick={() => setShowClearConfirm(true)}>
                 🗑 Очистить весь каталог
