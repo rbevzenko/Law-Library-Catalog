@@ -228,6 +228,23 @@ export function useLibrary(githubToken) {
     if (githubToken && newBooks) syncToCloud(newBooks)
   }, [githubToken, syncToCloud])
 
+  const fixCorruptedTitles = useCallback(() => {
+    // Remove leading '|' characters from titles corrupted by a previous parsing bug
+    const now = new Date().toISOString()
+    let fixed = 0
+    let newBooks
+    setBooks(prev => {
+      newBooks = prev.map(b => {
+        if (!b.title || !b.title.startsWith('|')) return b
+        fixed++
+        return { ...b, title: b.title.replace(/^\|+/, '').trim(), updatedAt: now }
+      })
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+    return fixed
+  }, [githubToken, syncToCloud])
+
   const clearAllBooks = useCallback(() => {
     setBooks([])
     localStorage.removeItem(LOCAL_KEY)
@@ -262,6 +279,7 @@ export function useLibrary(githubToken) {
     forceSync,
     bulkAddBooks,
     bulkUpdateBooks,
+    fixCorruptedTitles,
     clearAllBooks,
     importFromJSON,
     exportToJSON,

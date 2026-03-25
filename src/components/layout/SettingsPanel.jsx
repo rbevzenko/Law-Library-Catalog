@@ -49,6 +49,7 @@ export function SettingsPanel({
   books,
   bulkAddBooks,
   bulkUpdateBooks,
+  fixCorruptedTitles,
   clearAllBooks,
   syncStatus,
   lastSyncedAt,
@@ -175,8 +176,14 @@ export function SettingsPanel({
   }
 
   const allBooks = books || []
+  const corruptedCount  = allBooks.filter(b => b.title?.startsWith('|')).length
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
   const unclassified    = allBooks.filter(b => (!b.legalOrder || b.legalOrder.length === 0) && (!b.topics || b.topics.length === 0)).length
+
+  function handleFixCorrupted() {
+    const fixed = fixCorruptedTitles()
+    setOp('parse', { result: { count: fixed, fixMsg: true }, error: '' })
+  }
 
   function setOp(key, patch) {
     setOps(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
@@ -536,6 +543,15 @@ export function SettingsPanel({
             <div style={{ marginBottom: '16px', fontSize: '12px', color: '#4a5a70', lineHeight: 1.5 }}>
               Пропускает книги с уже заполненными полями. Требует ключ Anthropic API.
             </div>
+
+            {corruptedCount > 0 && (
+              <div style={{ marginBottom: '12px', padding: '10px 14px', background: 'rgba(200,80,50,0.08)', border: '1px solid rgba(200,80,50,0.3)', borderRadius: '8px', fontSize: '12px', color: '#e07050', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                <span>⚠ {corruptedCount} названий повреждены (начинаются с |)</span>
+                <Button variant="secondary" size="sm" onClick={handleFixCorrupted}>
+                  Исправить
+                </Button>
+              </div>
+            )}
 
             {!anthropicKey && (
               <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'rgba(200,168,80,0.06)', border: '1px solid rgba(200,168,80,0.2)', borderRadius: '8px', fontSize: '12px', color: '#c8a850' }}>

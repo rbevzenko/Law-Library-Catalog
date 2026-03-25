@@ -153,7 +153,7 @@ export default function App() {
   const {
     books, syncStatus, syncError, lastSyncedAt, initialized,
     addBook, updateBook, deleteBook, forceSync,
-    bulkAddBooks, bulkUpdateBooks, clearAllBooks, exportToJSON, exportToCSV, importFromJSON,
+    bulkAddBooks, bulkUpdateBooks, fixCorruptedTitles, clearAllBooks, exportToJSON, exportToCSV, importFromJSON,
   } = useLibrary(githubToken)
 
   const [view, setView] = useState('grid')
@@ -329,6 +329,7 @@ export default function App() {
         books={books}
         bulkAddBooks={bulkAddBooks}
         bulkUpdateBooks={bulkUpdateBooks}
+        fixCorruptedTitles={fixCorruptedTitles}
         clearAllBooks={clearAllBooks}
         syncStatus={syncStatus}
         lastSyncedAt={lastSyncedAt}
