@@ -278,6 +278,34 @@ export function useLibrary(githubToken) {
     return fixed
   }, [githubToken, syncToCloud])
 
+  const removeDuplicates = useCallback(() => {
+    // For each group of books with the same title (case-insensitive),
+    // keep the one with the most filled-in fields, remove the rest.
+    let removed = 0
+    let newBooks
+    setBooks(prev => {
+      const groups = new Map()
+      for (const b of prev) {
+        const key = (b.title || '').trim().toLowerCase()
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(b)
+      }
+      const score = b => [
+        b.author, b.description, b.notes, b.yaPath,
+        ...(b.legalOrder || []), ...(b.topics || []), ...(b.tags || []),
+      ].filter(Boolean).length + (b.rating ? 1 : 0) + (b.year && b.year < new Date().getFullYear() ? 1 : 0)
+      newBooks = []
+      for (const group of groups.values()) {
+        const best = group.reduce((a, b) => score(b) > score(a) ? b : a)
+        newBooks.push(best)
+        removed += group.length - 1
+      }
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+    return removed
+  }, [githubToken, syncToCloud])
+
   const fixCorruptedTitles = useCallback(() => {
     // Remove leading '|' characters from titles corrupted by a previous parsing bug
     const now = new Date().toISOString()
@@ -332,6 +360,7 @@ export function useLibrary(githubToken) {
     bulkUpdateBooks,
     fixYearsFromRegex,
     fixCorruptedTitles,
+    removeDuplicates,
     clearAllBooks,
     importFromJSON,
     exportToJSON,
