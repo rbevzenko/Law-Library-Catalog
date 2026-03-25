@@ -1,6 +1,5 @@
 const PARSE_BATCH_SIZE = 80
 const CLASSIFY_BATCH_SIZE = 30
-const DESCRIBE_BATCH_SIZE = 10
 
 const LEGAL_ORDERS = ['Russia', 'Germany', 'France', 'Netherlands', 'Switzerland', 'Austria', 'England/USA', 'Roman law', 'EU', 'International', 'Spain', 'Italy', 'Other']
 const TOPICS = ['General Civil Law', 'Property Law', 'Contract Law', 'Obligations', 'Tort Law', 'Corporate Law', 'Pledge/Security', 'Invalidity of Transactions', 'Family Law', 'Inheritance Law', 'Procedural Law', 'Comparative Law', 'Legal History', 'Legal Theory', 'Roman Law', 'Bankruptcy', 'Other']
@@ -112,43 +111,7 @@ export async function classifyBooksInBatches(books, apiKey, onProgress) {
   return results
 }
 
-// ── Generate descriptions ─────────────────────────────────────────────────────
-
-async function describesBatch(books, apiKey) {
-  const prompt = `You are a legal bibliographer. Write a concise academic annotation (2–4 sentences) in Russian for each book. Base the annotation on the title, author, legal systems, and topics.
-
-Books:
-${books.map((b, i) => {
-  const parts = [`${i + 1}. «${b.title}»`]
-  if (b.author) parts.push(`автор: ${b.author}`)
-  if (b.legalOrder?.length) parts.push(`правовые системы: ${b.legalOrder.join(', ')}`)
-  if (b.topics?.length) parts.push(`темы: ${b.topics.join(', ')}`)
-  return parts.join('; ')
-}).join('\n')}
-
-Return ONLY a valid JSON array, no explanation:
-[{"index":1,"description":"..."}, ...]`
-
-  const text = await callClaude(apiKey, 'claude-haiku-4-5-20251001', prompt, 4096)
-  const parsed = extractJSON(text)
-  return parsed.map(item => ({
-    id: books[item.index - 1]?.id,
-    description: item.description || '',
-  })).filter(item => item.id && item.description)
-}
-
-export async function generateDescriptionsInBatches(books, apiKey, onProgress) {
-  const toProcess = books.filter(b => !b.description || b.description.trim() === '')
-  const results = []
-  for (let i = 0; i < toProcess.length; i += DESCRIBE_BATCH_SIZE) {
-    const batch = toProcess.slice(i, i + DESCRIBE_BATCH_SIZE)
-    results.push(...await describesBatch(batch, apiKey))
-    if (onProgress) onProgress(Math.min(i + DESCRIBE_BATCH_SIZE, toProcess.length), toProcess.length)
-  }
-  return results
-}
-
-// ── Per-book description (existing, used in BookForm) ────────────────────────
+// ── Per-book description (used in BookForm) ──────────────────────────────────
 
 export async function generateDescription(book, apiKey) {
   const prompt = `You are a legal bibliographer. Write a concise academic annotation (3–5 sentences) in Russian for the following book in a legal catalog. Book: «${book.title}», author: ${book.author}, year: ${book.year}, legal systems covered: ${(book.legalOrder || []).join(', ')}, topics: ${(book.topics || []).join(', ')}. Respond with annotation text only, no headings.`

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Button } from '../ui/Button'
 import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
-import { parseTitlesInBatches, classifyBooksInBatches, generateDescriptionsInBatches } from '../../api/anthropic'
+import { parseTitlesInBatches, classifyBooksInBatches } from '../../api/anthropic'
 import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
 
 function formatBytes(bytes) {
@@ -60,7 +60,6 @@ export function SettingsPanel({
   const [ops, setOps] = useState({
     parse:    { progress: null, result: null, error: '' },
     classify: { progress: null, result: null, error: '' },
-    describe: { progress: null, result: null, error: '' },
   })
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
@@ -178,7 +177,6 @@ export function SettingsPanel({
   const allBooks = books || []
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
   const unclassified    = allBooks.filter(b => (!b.legalOrder || b.legalOrder.length === 0) && (!b.topics || b.topics.length === 0)).length
-  const undescribed     = allBooks.filter(b => !b.description || b.description.trim() === '').length
 
   function setOp(key, patch) {
     setOps(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
@@ -562,14 +560,6 @@ export function SettingsPanel({
                   count: unclassified,
                   batchSize: 30,
                   fn: classifyBooksInBatches,
-                },
-                {
-                  key: 'describe',
-                  label: 'Генерировать аннотации',
-                  hint: 'Краткое академическое описание',
-                  count: undescribed,
-                  batchSize: 10,
-                  fn: generateDescriptionsInBatches,
                 },
               ].map(({ key, label, hint, count, batchSize, fn }) => {
                 const op = ops[key]
