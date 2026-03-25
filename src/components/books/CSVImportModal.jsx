@@ -154,10 +154,11 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
         const tables = await loadSQLite(buf)
         setSqliteTables(tables)
         const names = Object.keys(tables)
-        // Auto-select if only one table, or pick first that looks like books
-        const guess = names.find(n => /book|title|lib|catalog/i.test(n)) || names[0]
-        if (guess) applyTable(tables, guess)
-        else setStep('selectTable')
+        if (names.length === 1) {
+          applyTable(tables, names[0])
+        } else {
+          setStep('selectTable')
+        }
       } catch (err) {
         alert('Не удалось прочитать SQLite файл: ' + err.message)
       } finally {
@@ -323,7 +324,7 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
             </div>
             <div style={{ color: '#8899bb', fontSize: '13px', marginBottom: '24px' }}>
               {totalInFile - imported > 0 && (
-                <>{totalInFile - imported} книг пропущено — уже есть в каталоге (совпадение по названию).<br /></>
+                <>{totalInFile - imported} книг пропущено — уже есть среди бумажных (совпадение по названию).<br /></>
               )}
               Все книги добавлены с форматом «бумажная».
             </div>
