@@ -154,10 +154,11 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
         const tables = await loadSQLite(buf)
         setSqliteTables(tables)
         const names = Object.keys(tables)
-        // Auto-select if only one table, or pick first that looks like books
-        const guess = names.find(n => /book|title|lib|catalog/i.test(n)) || names[0]
-        if (guess) applyTable(tables, guess)
-        else setStep('selectTable')
+        if (names.length === 1) {
+          applyTable(tables, names[0])
+        } else {
+          setStep('selectTable')
+        }
       } catch (err) {
         alert('Не удалось прочитать SQLite файл: ' + err.message)
       } finally {
