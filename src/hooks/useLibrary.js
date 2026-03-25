@@ -220,7 +220,8 @@ export function useLibrary(githubToken) {
     let addedCount = 0
     let updated
     setBooks(prev => {
-      const seen = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      // Only deduplicate against existing paper books — PDFs are separate entries
+      const seen = new Set(prev.filter(b => b.format === 'paper').map(b => b.title.trim().toLowerCase()).filter(Boolean))
       const toAdd = []
       for (const b of books) {
         if (!b.title) continue

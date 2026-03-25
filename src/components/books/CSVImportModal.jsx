@@ -323,7 +323,7 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
             </div>
             <div style={{ color: '#8899bb', fontSize: '13px', marginBottom: '24px' }}>
               {totalInFile - imported > 0 && (
-                <>{totalInFile - imported} книг пропущено — уже есть в каталоге (совпадение по названию).<br /></>
+                <>{totalInFile - imported} книг пропущено — уже есть среди бумажных (совпадение по названию).<br /></>
               )}
               Все книги добавлены с форматом «бумажная».
             </div>
