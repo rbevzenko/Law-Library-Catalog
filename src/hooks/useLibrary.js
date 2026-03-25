@@ -197,12 +197,17 @@ export function useLibrary(githubToken) {
     let addedCount = 0
     let updated
     setBooks(prev => {
-      const existingPaths = new Set(prev.map(b => b.yaPath).filter(Boolean))
-      const existingTitles = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
-      const toAdd = newBooks.filter(b =>
-        !existingPaths.has(b.yaPath) &&
-        !existingTitles.has(b.title.trim().toLowerCase())
-      )
+      const seenPaths  = new Set(prev.map(b => b.yaPath).filter(Boolean))
+      const seenTitles = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      const toAdd = []
+      for (const b of newBooks) {
+        if (b.yaPath && seenPaths.has(b.yaPath)) continue
+        const key = b.title.trim().toLowerCase()
+        if (seenTitles.has(key)) continue
+        if (b.yaPath) seenPaths.add(b.yaPath)
+        seenTitles.add(key)   // deduplicate within the incoming batch too
+        toAdd.push(b)
+      }
       addedCount = toAdd.length
       updated = [...toAdd, ...prev]
       return updated
@@ -215,8 +220,15 @@ export function useLibrary(githubToken) {
     let addedCount = 0
     let updated
     setBooks(prev => {
-      const existingTitles = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
-      const toAdd = books.filter(b => b.title && !existingTitles.has(b.title.trim().toLowerCase()))
+      const seen = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      const toAdd = []
+      for (const b of books) {
+        if (!b.title) continue
+        const key = b.title.trim().toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)   // deduplicate within the incoming batch too
+        toAdd.push(b)
+      }
       addedCount = toAdd.length
       updated = [...toAdd, ...prev]
       return updated
