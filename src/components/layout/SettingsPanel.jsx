@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Button } from '../ui/Button'
 import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
+import { parseTitlesInBatches } from '../../api/anthropic'
 import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
 
 function formatBytes(bytes) {
@@ -45,7 +46,9 @@ export function SettingsPanel({
   setAnthropicKey,
   booksFolder,
   setBooksFolder,
+  books,
   bulkAddBooks,
+  bulkUpdateBooks,
   clearAllBooks,
   syncStatus,
   lastSyncedAt,
@@ -54,6 +57,9 @@ export function SettingsPanel({
   exportToCSV,
   importFromJSON,
 }) {
+  const [parseProgress, setParseProgress] = useState(null) // null | {done, total}
+  const [parseResult, setParseResult] = useState(null) // null | {count}
+  const [parseError, setParseError] = useState('')
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
@@ -165,6 +171,28 @@ export function SettingsPanel({
       setImportError('Ошибка импорта: ' + err.message)
     }
     setPendingFile(null)
+  }
+
+  const unparsedCount = (books || []).filter(b => !b.author || b.author.trim() === '').length
+
+  async function handleParseTitles() {
+    if (!anthropicKey) return
+    setParseError('')
+    setParseResult(null)
+    setParseProgress({ done: 0, total: unparsedCount })
+    try {
+      const updates = await parseTitlesInBatches(
+        books || [],
+        anthropicKey,
+        (done, total) => setParseProgress({ done, total })
+      )
+      bulkUpdateBooks(updates)
+      setParseResult({ count: updates.length })
+    } catch (err) {
+      setParseError('Ошибка: ' + err.message)
+    } finally {
+      setParseProgress(null)
+    }
   }
 
   if (!isOpen) return null
@@ -492,6 +520,68 @@ export function SettingsPanel({
               )}
             </section>
           )}
+
+          {/* Parse Titles */}
+          <section>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
+              Обработка названий
+            </h3>
+            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#8899bb', lineHeight: 1.6 }}>
+              Разбирает названия книг по шаблону <span style={{ color: '#e0d8c8', fontFamily: 'monospace' }}>"Фамилия, Название"</span> и переносит автора в отдельное поле.
+              Пропускает книги, у которых автор уже заполнен.
+              Требует ключ Anthropic API.
+            </div>
+            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#7aaad0' }}>
+              Книг без автора: <strong style={{ color: '#c8a850' }}>{unparsedCount}</strong>
+              {unparsedCount > 0 && (
+                <span style={{ color: '#4a5a70' }}>
+                  {' '}≈ {Math.ceil(unparsedCount / 80)} запросов к API
+                </span>
+              )}
+            </div>
+
+            {parseProgress && (
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '13px', color: '#8899bb', marginBottom: '6px' }}>
+                  Обработано: {parseProgress.done} / {parseProgress.total}
+                </div>
+                <div style={{ background: '#1a2035', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${parseProgress.total > 0 ? (parseProgress.done / parseProgress.total) * 100 : 0}%`,
+                    background: 'linear-gradient(90deg, #c8a850, #e0c870)',
+                    transition: 'width 0.3s',
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {parseResult && (
+              <div style={{ marginBottom: '10px', padding: '10px 14px', background: 'rgba(58,122,80,0.1)', border: '1px solid rgba(58,122,80,0.3)', borderRadius: '8px', fontSize: '13px', color: '#3a7a50' }}>
+                ✅ Разобрано {parseResult.count} книг
+              </div>
+            )}
+
+            {parseError && (
+              <div style={{ marginBottom: '10px', padding: '10px 14px', background: 'rgba(200,50,50,0.1)', border: '1px solid rgba(200,50,50,0.3)', borderRadius: '8px', fontSize: '13px', color: '#e05050' }}>
+                {parseError}
+              </div>
+            )}
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleParseTitles}
+              disabled={!!parseProgress || unparsedCount === 0 || !anthropicKey}
+            >
+              {parseProgress ? '⏳ Обработка...' : `✦ Разобрать названия (${unparsedCount})`}
+            </Button>
+            {!anthropicKey && (
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#4a5a70' }}>
+                Укажите ключ Anthropic API ниже
+              </div>
+            )}
+          </section>
 
           {/* Anthropic */}
           <section>
