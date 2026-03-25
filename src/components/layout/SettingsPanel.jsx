@@ -3,6 +3,7 @@ import { Button } from '../ui/Button'
 import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
 import { parseTitlesInBatches, classifyBooksInBatches, estimateYearsInBatches } from '../../api/anthropic'
 import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
+import { CSVImportModal } from '../books/CSVImportModal'
 
 function formatBytes(bytes) {
   if (!bytes) return '0 Б'
@@ -48,6 +49,7 @@ export function SettingsPanel({
   setBooksFolder,
   books,
   bulkAddBooks,
+  importPaperBooks,
   bulkUpdateBooks,
   fixYearsFromRegex,
   fixCorruptedTitles,
@@ -65,6 +67,7 @@ export function SettingsPanel({
     yearAI:   { progress: null, result: null, error: '' },
   })
   const [yearRegexResult, setYearRegexResult] = useState(null)
+  const [csvModalOpen, setCsvModalOpen] = useState(false)
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
@@ -716,6 +719,9 @@ export function SettingsPanel({
                   📊 Экспорт в CSV (Excel)
                 </Button>
               )}
+              <Button variant="secondary" size="sm" onClick={() => setCsvModalOpen(true)}>
+                📋 Импорт бумажных книг из CSV
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -800,6 +806,12 @@ export function SettingsPanel({
           </div>
         </div>
       )}
+
+      <CSVImportModal
+        isOpen={csvModalOpen}
+        onClose={() => setCsvModalOpen(false)}
+        onImport={importPaperBooks}
+      />
     </>
   )
 }
