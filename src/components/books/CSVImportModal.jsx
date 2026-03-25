@@ -44,7 +44,7 @@ async function loadSQLite(arrayBuffer) {
   const tables = {}
   for (const name of tableNames) {
     try {
-      const res = db.exec(`SELECT * FROM "${name}" LIMIT 500`)
+      const res = db.exec(`SELECT * FROM "${name}"`)
       if (res.length > 0) tables[name] = { columns: res[0].columns, rows: res[0].values }
     } catch { /* skip unreadable tables */ }
   }
@@ -129,13 +129,14 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
   const [selectedTable, setSelectedTable] = useState('')
   const [mapping, setMapping] = useState({})
   const [imported, setImported] = useState(0)
+  const [totalInFile, setTotalInFile] = useState(0)
   const [loading, setLoading] = useState(false)
   const fileRef = useRef()
 
   const reset = useCallback(() => {
     setStep('upload'); setHeaders([]); setRows([])
     setSqliteTables(null); setSelectedTable(''); setMapping({})
-    setImported(0); setLoading(false)
+    setImported(0); setTotalInFile(0); setLoading(false)
     if (fileRef.current) fileRef.current.value = ''
   }, [])
 
@@ -188,6 +189,7 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
   function handleImport() {
     if (!mapping.title) { alert('Необходимо выбрать колонку для Названия'); return }
     const books = buildBooks(rows, headers, mapping)
+    setTotalInFile(books.length)
     const count = onImport(books)
     setImported(count); setStep('done')
   }
@@ -317,10 +319,12 @@ export function CSVImportModal({ isOpen, onClose, onImport }) {
           <div style={{ textAlign: 'center', padding: '32px 0' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
             <div style={{ color: '#3a7a50', fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
-              Импортировано {imported} книг
+              Добавлено {imported} из {totalInFile} книг
             </div>
             <div style={{ color: '#8899bb', fontSize: '13px', marginBottom: '24px' }}>
-              Дубликаты (совпадение по названию) пропущены.<br />
+              {totalInFile - imported > 0 && (
+                <>{totalInFile - imported} книг пропущено — уже есть в каталоге (совпадение по названию).<br /></>
+              )}
               Все книги добавлены с форматом «бумажная».
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
