@@ -28,8 +28,9 @@ async function callClaude(apiKey, model, prompt, maxTokens) {
 }
 
 // ── Parse titles ─────────────────────────────────────────────────────────────
-// Output format: one line per book: INDEX|||AUTHOR|||TITLE
-// Using ||| delimiter instead of JSON to avoid issues with quotes in titles
+// Output: two lines per entry:
+//   [N] AUTHOR: Surname(s)
+//   [N] TITLE: Book title
 
 async function parseTitlesBatch(books, apiKey) {
   const prompt = `You are parsing filenames from a Russian legal library catalog.
@@ -38,32 +39,40 @@ Each filename follows the pattern "Surname(s), Book Title" or just "Book Title" 
 Rules:
 - Russian author surnames come FIRST, each is a single word starting with a capital Cyrillic letter
 - Multiple authors are consecutive single-word entries separated by commas before the actual title
-- Example: "Брагинский, Витрянский, Договорное право" → author: Брагинский, Витрянский | title: Договорное право
-- If the text starts with what looks like a book title (not a surname), leave author empty
-- Keep the full title including volume/edition info like Том 1, Выпуск 2, Часть первая, etc.
+- Example: "Брагинский, Витрянский, Договорное право" → AUTHOR: Брагинский, Витрянский | TITLE: Договорное право
+- If the text starts with what looks like a book title (not a surname), leave AUTHOR empty
+- Keep the full title including volume/edition info like Том 1, Выпуск 2, Часть первая
 
-Entries:
+Entries to parse:
 ${books.map((b, i) => `${i + 1}. ${b.title}`).join('\n')}
 
-Return ONLY lines in this exact format, one per entry, no explanation:
-INDEX|||AUTHOR|||TITLE
-
-Example:
-1|||Брагинский, Витрянский|||Договорное право. Книга первая
-2|||Аболонин|||Злоупотребление правом на иск
-3||||||Гражданский кодекс Германии`
+Output format — two lines per entry, no extra text:
+[1] AUTHOR: Брагинский, Витрянский
+[1] TITLE: Договорное право. Книга первая
+[2] AUTHOR: Аболонин
+[2] TITLE: Злоупотребление правом на иск
+[3] AUTHOR:
+[3] TITLE: Гражданский кодекс Германии`
 
   const text = await callClaude(apiKey, 'claude-haiku-4-5-20251001', prompt, 4096)
-  const results = []
+
+  const authorMap = new Map()
+  const titleMap = new Map()
   for (const line of text.split('\n')) {
-    const parts = line.trim().split('|||')
-    if (parts.length < 3) continue
-    const index = parseInt(parts[0], 10) - 1
-    if (isNaN(index) || index < 0 || index >= books.length) continue
+    const a = line.match(/^\[(\d+)\]\s+AUTHOR:\s*(.*)/)
+    const t = line.match(/^\[(\d+)\]\s+TITLE:\s*(.*)/)
+    if (a) authorMap.set(parseInt(a[1]), a[2].trim())
+    if (t) titleMap.set(parseInt(t[1]), t[2].trim())
+  }
+
+  const results = []
+  for (let i = 0; i < books.length; i++) {
+    const n = i + 1
+    if (!titleMap.has(n) && !authorMap.has(n)) continue
     results.push({
-      id: books[index].id,
-      author: parts[1].trim(),
-      title: parts[2].trim() || books[index].title,
+      id: books[i].id,
+      author: authorMap.get(n) ?? '',
+      title: titleMap.get(n) || books[i].title,
     })
   }
   return results
@@ -81,37 +90,45 @@ export async function parseTitlesInBatches(books, apiKey, onProgress) {
 }
 
 // ── Classify legalOrder + topics ──────────────────────────────────────────────
-// Output format: INDEX|||legalOrder1,legalOrder2|||topic1,topic2
+// Output: two lines per entry:
+//   [N] LEGAL: Russia,Germany
+//   [N] TOPICS: Contract Law,Obligations
 
 async function classifyBatch(books, apiKey) {
   const prompt = `You are classifying books from a Russian legal library catalog.
 For each book determine which legal systems it covers and which legal topics it addresses.
 
 Use ONLY these exact values:
-legalOrder: ${LEGAL_ORDERS.join(', ')}
-topics: ${TOPICS.join(', ')}
+LEGAL: ${LEGAL_ORDERS.join(', ')}
+TOPICS: ${TOPICS.join(', ')}
 
 Books:
 ${books.map((b, i) => `${i + 1}. ${b.title}${b.author ? ` — ${b.author}` : ''}`).join('\n')}
 
-Return ONLY lines in this exact format, one per entry, no explanation:
-INDEX|||legalOrder1,legalOrder2|||topic1,topic2
-
-Example:
-1|||Russia,Germany|||Contract Law,Obligations
-2|||Roman law|||Legal History,Roman Law
-3|||Russia|||General Civil Law`
+Output format — two lines per entry, no extra text:
+[1] LEGAL: Russia,Germany
+[1] TOPICS: Contract Law,Obligations
+[2] LEGAL: Roman law
+[2] TOPICS: Legal History,Roman Law`
 
   const text = await callClaude(apiKey, 'claude-haiku-4-5-20251001', prompt, 4096)
-  const results = []
+
+  const legalMap = new Map()
+  const topicsMap = new Map()
   for (const line of text.split('\n')) {
-    const parts = line.trim().split('|||')
-    if (parts.length < 3) continue
-    const index = parseInt(parts[0], 10) - 1
-    if (isNaN(index) || index < 0 || index >= books.length) continue
-    const legalOrder = parts[1].split(',').map(s => s.trim()).filter(v => LEGAL_ORDERS.includes(v))
-    const topics = parts[2].split(',').map(s => s.trim()).filter(v => TOPICS.includes(v))
-    results.push({ id: books[index].id, legalOrder, topics })
+    const l = line.match(/^\[(\d+)\]\s+LEGAL:\s*(.*)/)
+    const t = line.match(/^\[(\d+)\]\s+TOPICS:\s*(.*)/)
+    if (l) legalMap.set(parseInt(l[1]), l[2].trim())
+    if (t) topicsMap.set(parseInt(t[1]), t[2].trim())
+  }
+
+  const results = []
+  for (let i = 0; i < books.length; i++) {
+    const n = i + 1
+    if (!legalMap.has(n) && !topicsMap.has(n)) continue
+    const legalOrder = (legalMap.get(n) || '').split(',').map(s => s.trim()).filter(v => LEGAL_ORDERS.includes(v))
+    const topics = (topicsMap.get(n) || '').split(',').map(s => s.trim()).filter(v => TOPICS.includes(v))
+    results.push({ id: books[i].id, legalOrder, topics })
   }
   return results
 }
