@@ -27,13 +27,9 @@ async function callClaude(apiKey, model, prompt, maxTokens) {
   return data.content?.[0]?.text || ''
 }
 
-function extractJSON(text) {
-  const match = text.match(/\[[\s\S]*\]/)
-  if (!match) throw new Error('Неверный формат ответа от API')
-  return JSON.parse(match[0])
-}
-
 // ── Parse titles ─────────────────────────────────────────────────────────────
+// Output format: one line per book: INDEX|||AUTHOR|||TITLE
+// Using ||| delimiter instead of JSON to avoid issues with quotes in titles
 
 async function parseTitlesBatch(books, apiKey) {
   const prompt = `You are parsing filenames from a Russian legal library catalog.
@@ -42,23 +38,35 @@ Each filename follows the pattern "Surname(s), Book Title" or just "Book Title" 
 Rules:
 - Russian author surnames come FIRST, each is a single word starting with a capital Cyrillic letter
 - Multiple authors are consecutive single-word entries separated by commas before the actual title
-- Example: "Брагинский, Витрянский, Договорное право" → author: "Брагинский, Витрянский", title: "Договорное право"
-- If the text starts with what looks like a book title (not a surname), return empty author
-- Keep the full title including volume/edition info like "Том 1", "Выпуск 2", "Часть первая", etc.
+- Example: "Брагинский, Витрянский, Договорное право" → author: Брагинский, Витрянский | title: Договорное право
+- If the text starts with what looks like a book title (not a surname), leave author empty
+- Keep the full title including volume/edition info like Том 1, Выпуск 2, Часть первая, etc.
 
 Entries:
 ${books.map((b, i) => `${i + 1}. ${b.title}`).join('\n')}
 
-Return ONLY a valid JSON array, no explanation:
-[{"index":1,"author":"...","title":"..."}, ...]`
+Return ONLY lines in this exact format, one per entry, no explanation:
+INDEX|||AUTHOR|||TITLE
+
+Example:
+1|||Брагинский, Витрянский|||Договорное право. Книга первая
+2|||Аболонин|||Злоупотребление правом на иск
+3||||||Гражданский кодекс Германии`
 
   const text = await callClaude(apiKey, 'claude-haiku-4-5-20251001', prompt, 4096)
-  const parsed = extractJSON(text)
-  return parsed.map(item => ({
-    id: books[item.index - 1]?.id,
-    author: item.author || '',
-    title: item.title || books[item.index - 1]?.title || '',
-  })).filter(item => item.id)
+  const results = []
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split('|||')
+    if (parts.length < 3) continue
+    const index = parseInt(parts[0], 10) - 1
+    if (isNaN(index) || index < 0 || index >= books.length) continue
+    results.push({
+      id: books[index].id,
+      author: parts[1].trim(),
+      title: parts[2].trim() || books[index].title,
+    })
+  }
+  return results
 }
 
 export async function parseTitlesInBatches(books, apiKey, onProgress) {
@@ -73,6 +81,7 @@ export async function parseTitlesInBatches(books, apiKey, onProgress) {
 }
 
 // ── Classify legalOrder + topics ──────────────────────────────────────────────
+// Output format: INDEX|||legalOrder1,legalOrder2|||topic1,topic2
 
 async function classifyBatch(books, apiKey) {
   const prompt = `You are classifying books from a Russian legal library catalog.
@@ -83,18 +92,28 @@ legalOrder: ${LEGAL_ORDERS.join(', ')}
 topics: ${TOPICS.join(', ')}
 
 Books:
-${books.map((b, i) => `${i + 1}. "${b.title}"${b.author ? ` — ${b.author}` : ''}`).join('\n')}
+${books.map((b, i) => `${i + 1}. ${b.title}${b.author ? ` — ${b.author}` : ''}`).join('\n')}
 
-Return ONLY a valid JSON array, no explanation:
-[{"index":1,"legalOrder":["Russia"],"topics":["Contract Law","Obligations"]}, ...]`
+Return ONLY lines in this exact format, one per entry, no explanation:
+INDEX|||legalOrder1,legalOrder2|||topic1,topic2
+
+Example:
+1|||Russia,Germany|||Contract Law,Obligations
+2|||Roman law|||Legal History,Roman Law
+3|||Russia|||General Civil Law`
 
   const text = await callClaude(apiKey, 'claude-haiku-4-5-20251001', prompt, 4096)
-  const parsed = extractJSON(text)
-  return parsed.map(item => ({
-    id: books[item.index - 1]?.id,
-    legalOrder: (item.legalOrder || []).filter(v => LEGAL_ORDERS.includes(v)),
-    topics: (item.topics || []).filter(v => TOPICS.includes(v)),
-  })).filter(item => item.id)
+  const results = []
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split('|||')
+    if (parts.length < 3) continue
+    const index = parseInt(parts[0], 10) - 1
+    if (isNaN(index) || index < 0 || index >= books.length) continue
+    const legalOrder = parts[1].split(',').map(s => s.trim()).filter(v => LEGAL_ORDERS.includes(v))
+    const topics = parts[2].split(',').map(s => s.trim()).filter(v => TOPICS.includes(v))
+    results.push({ id: books[index].id, legalOrder, topics })
+  }
+  return results
 }
 
 export async function classifyBooksInBatches(books, apiKey, onProgress) {
