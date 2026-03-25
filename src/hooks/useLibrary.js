@@ -211,6 +211,23 @@ export function useLibrary(githubToken) {
     return addedCount
   }, [githubToken, syncToCloud])
 
+  const bulkUpdateBooks = useCallback((updates) => {
+    // updates: [{id, ...anyFields}] — patches each matched book with given fields
+    const now = new Date().toISOString()
+    const updateMap = new Map(updates.map(u => [u.id, u]))
+    let newBooks
+    setBooks(prev => {
+      newBooks = prev.map(b => {
+        const u = updateMap.get(b.id)
+        if (!u) return b
+        const { id: _id, ...fields } = u
+        return { ...b, ...fields, updatedAt: now }
+      })
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+  }, [githubToken, syncToCloud])
+
   const clearAllBooks = useCallback(() => {
     setBooks([])
     localStorage.removeItem(LOCAL_KEY)
@@ -244,6 +261,7 @@ export function useLibrary(githubToken) {
     deleteBook,
     forceSync,
     bulkAddBooks,
+    bulkUpdateBooks,
     clearAllBooks,
     importFromJSON,
     exportToJSON,
