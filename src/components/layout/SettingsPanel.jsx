@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Button } from '../ui/Button'
 import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
-import { parseTitlesInBatches } from '../../api/anthropic'
+import { parseTitlesInBatches, classifyBooksInBatches, generateDescriptionsInBatches } from '../../api/anthropic'
 import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
 
 function formatBytes(bytes) {
@@ -57,9 +57,11 @@ export function SettingsPanel({
   exportToCSV,
   importFromJSON,
 }) {
-  const [parseProgress, setParseProgress] = useState(null) // null | {done, total}
-  const [parseResult, setParseResult] = useState(null) // null | {count}
-  const [parseError, setParseError] = useState('')
+  const [ops, setOps] = useState({
+    parse:    { progress: null, result: null, error: '' },
+    classify: { progress: null, result: null, error: '' },
+    describe: { progress: null, result: null, error: '' },
+  })
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
@@ -173,27 +175,34 @@ export function SettingsPanel({
     setPendingFile(null)
   }
 
-  const unparsedCount = (books || []).filter(b => !b.author || b.author.trim() === '').length
+  const allBooks = books || []
+  const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
+  const unclassified    = allBooks.filter(b => (!b.legalOrder || b.legalOrder.length === 0) && (!b.topics || b.topics.length === 0)).length
+  const undescribed     = allBooks.filter(b => !b.description || b.description.trim() === '').length
 
-  async function handleParseTitles() {
+  function setOp(key, patch) {
+    setOps(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }))
+  }
+
+  async function runOp(key, batchFn, batchSize) {
     if (!anthropicKey) return
-    setParseError('')
-    setParseResult(null)
-    setParseProgress({ done: 0, total: unparsedCount })
+    setOp(key, { error: '', result: null, progress: { done: 0, total: 0 } })
     try {
-      const updates = await parseTitlesInBatches(
-        books || [],
+      const updates = await batchFn(
+        allBooks,
         anthropicKey,
-        (done, total) => setParseProgress({ done, total })
+        (done, total) => setOp(key, { progress: { done, total } })
       )
       bulkUpdateBooks(updates)
-      setParseResult({ count: updates.length })
+      setOp(key, { result: { count: updates.length } })
     } catch (err) {
-      setParseError('Ошибка: ' + err.message)
+      setOp(key, { error: 'Ошибка: ' + err.message })
     } finally {
-      setParseProgress(null)
+      setOp(key, { progress: null })
     }
   }
+
+  const anyRunning = Object.values(ops).some(o => o.progress !== null)
 
   if (!isOpen) return null
 
@@ -521,66 +530,99 @@ export function SettingsPanel({
             </section>
           )}
 
-          {/* Parse Titles */}
+          {/* Batch AI Processing */}
           <section>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
-              Обработка названий
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
+              Обработка каталога (AI)
             </h3>
-            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#8899bb', lineHeight: 1.6 }}>
-              Разбирает названия книг по шаблону <span style={{ color: '#e0d8c8', fontFamily: 'monospace' }}>"Фамилия, Название"</span> и переносит автора в отдельное поле.
-              Пропускает книги, у которых автор уже заполнен.
-              Требует ключ Anthropic API.
-            </div>
-            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#7aaad0' }}>
-              Книг без автора: <strong style={{ color: '#c8a850' }}>{unparsedCount}</strong>
-              {unparsedCount > 0 && (
-                <span style={{ color: '#4a5a70' }}>
-                  {' '}≈ {Math.ceil(unparsedCount / 80)} запросов к API
-                </span>
-              )}
+            <div style={{ marginBottom: '16px', fontSize: '12px', color: '#4a5a70', lineHeight: 1.5 }}>
+              Пропускает книги с уже заполненными полями. Требует ключ Anthropic API.
             </div>
 
-            {parseProgress && (
-              <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontSize: '13px', color: '#8899bb', marginBottom: '6px' }}>
-                  Обработано: {parseProgress.done} / {parseProgress.total}
-                </div>
-                <div style={{ background: '#1a2035', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${parseProgress.total > 0 ? (parseProgress.done / parseProgress.total) * 100 : 0}%`,
-                    background: 'linear-gradient(90deg, #c8a850, #e0c870)',
-                    transition: 'width 0.3s',
-                  }} />
-                </div>
-              </div>
-            )}
-
-            {parseResult && (
-              <div style={{ marginBottom: '10px', padding: '10px 14px', background: 'rgba(58,122,80,0.1)', border: '1px solid rgba(58,122,80,0.3)', borderRadius: '8px', fontSize: '13px', color: '#3a7a50' }}>
-                ✅ Разобрано {parseResult.count} книг
-              </div>
-            )}
-
-            {parseError && (
-              <div style={{ marginBottom: '10px', padding: '10px 14px', background: 'rgba(200,50,50,0.1)', border: '1px solid rgba(200,50,50,0.3)', borderRadius: '8px', fontSize: '13px', color: '#e05050' }}>
-                {parseError}
-              </div>
-            )}
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleParseTitles}
-              disabled={!!parseProgress || unparsedCount === 0 || !anthropicKey}
-            >
-              {parseProgress ? '⏳ Обработка...' : `✦ Разобрать названия (${unparsedCount})`}
-            </Button>
             {!anthropicKey && (
-              <div style={{ marginTop: '8px', fontSize: '12px', color: '#4a5a70' }}>
-                Укажите ключ Anthropic API ниже
+              <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'rgba(200,168,80,0.06)', border: '1px solid rgba(200,168,80,0.2)', borderRadius: '8px', fontSize: '12px', color: '#c8a850' }}>
+                Укажите ключ Anthropic API в разделе ниже
               </div>
             )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                {
+                  key: 'parse',
+                  label: 'Разобрать названия',
+                  hint: 'Фамилия, Название → отдельные поля',
+                  count: unparsedCount,
+                  batchSize: 80,
+                  fn: parseTitlesInBatches,
+                },
+                {
+                  key: 'classify',
+                  label: 'Классифицировать',
+                  hint: 'Правовые системы и темы',
+                  count: unclassified,
+                  batchSize: 30,
+                  fn: classifyBooksInBatches,
+                },
+                {
+                  key: 'describe',
+                  label: 'Генерировать аннотации',
+                  hint: 'Краткое академическое описание',
+                  count: undescribed,
+                  batchSize: 10,
+                  fn: generateDescriptionsInBatches,
+                },
+              ].map(({ key, label, hint, count, batchSize, fn }) => {
+                const op = ops[key]
+                const pct = op.progress?.total > 0
+                  ? Math.round((op.progress.done / op.progress.total) * 100) : 0
+                return (
+                  <div key={key} style={{ padding: '12px 14px', background: '#1a2035', borderRadius: '8px', border: '1px solid #2a3050' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: op.progress ? '8px' : '0' }}>
+                      <div>
+                        <div style={{ fontSize: '13px', color: '#ccd6f6', fontWeight: 500 }}>{label}</div>
+                        <div style={{ fontSize: '11px', color: '#4a5a70', marginTop: '2px' }}>{hint}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '12px', color: count > 0 ? '#c8a850' : '#3a7a50' }}>
+                          {count > 0 ? `${count} кн. · ≈${Math.ceil(count / batchSize)} зап.` : '✓ готово'}
+                        </span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => runOp(key, fn, batchSize)}
+                          disabled={anyRunning || count === 0 || !anthropicKey}
+                        >
+                          {op.progress ? '⏳' : '▶'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {op.progress && (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#8899bb', marginBottom: '4px' }}>
+                          <span>{op.progress.done} / {op.progress.total}</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div style={{ background: '#0f1220', borderRadius: '3px', height: '4px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #c8a850, #e0c870)', transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {op.result && (
+                      <div style={{ marginTop: '6px', fontSize: '12px', color: '#3a7a50' }}>
+                        ✅ Обработано: {op.result.count}
+                      </div>
+                    )}
+                    {op.error && (
+                      <div style={{ marginTop: '6px', fontSize: '12px', color: '#e05050' }}>
+                        {op.error}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </section>
 
           {/* Anthropic */}

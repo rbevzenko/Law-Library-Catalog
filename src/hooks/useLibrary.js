@@ -212,7 +212,7 @@ export function useLibrary(githubToken) {
   }, [githubToken, syncToCloud])
 
   const bulkUpdateBooks = useCallback((updates) => {
-    // updates: [{id, author, title}]
+    // updates: [{id, ...anyFields}] — patches each matched book with given fields
     const now = new Date().toISOString()
     const updateMap = new Map(updates.map(u => [u.id, u]))
     let newBooks
@@ -220,7 +220,8 @@ export function useLibrary(githubToken) {
       newBooks = prev.map(b => {
         const u = updateMap.get(b.id)
         if (!u) return b
-        return { ...b, author: u.author, title: u.title, updatedAt: now }
+        const { id: _id, ...fields } = u
+        return { ...b, ...fields, updatedAt: now }
       })
       return newBooks
     })
