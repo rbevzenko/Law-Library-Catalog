@@ -211,6 +211,20 @@ export function useLibrary(githubToken) {
     return addedCount
   }, [githubToken, syncToCloud])
 
+  const importPaperBooks = useCallback((books) => {
+    let addedCount = 0
+    let updated
+    setBooks(prev => {
+      const existingTitles = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      const toAdd = books.filter(b => b.title && !existingTitles.has(b.title.trim().toLowerCase()))
+      addedCount = toAdd.length
+      updated = [...toAdd, ...prev]
+      return updated
+    })
+    if (githubToken && updated) syncToCloud(updated)
+    return addedCount
+  }, [githubToken, syncToCloud])
+
   const bulkUpdateBooks = useCallback((updates) => {
     // updates: [{id, ...anyFields}] — patches each matched book with given fields
     const now = new Date().toISOString()
@@ -226,6 +240,30 @@ export function useLibrary(githubToken) {
       return newBooks
     })
     if (githubToken && newBooks) syncToCloud(newBooks)
+  }, [githubToken, syncToCloud])
+
+  const fixYearsFromRegex = useCallback(() => {
+    // Extract 4-digit year (1800–last year) from title or yaPath, update books with default year
+    const currentYear = new Date().getFullYear()
+    const yearRe = /\b(1[89]\d{2}|20[012]\d)\b/g
+    const now = new Date().toISOString()
+    let fixed = 0
+    let newBooks
+    setBooks(prev => {
+      newBooks = prev.map(b => {
+        if (b.year && b.year < currentYear) return b // already has a real year
+        const hay = (b.title || '') + ' ' + (b.yaPath || '')
+        const matches = [...hay.matchAll(yearRe)].map(m => parseInt(m[1], 10))
+        if (!matches.length) return b
+        // prefer the last match (publication year usually trails edition/volume info)
+        const year = matches[matches.length - 1]
+        fixed++
+        return { ...b, year, updatedAt: now }
+      })
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+    return fixed
   }, [githubToken, syncToCloud])
 
   const fixCorruptedTitles = useCallback(() => {
@@ -278,7 +316,9 @@ export function useLibrary(githubToken) {
     deleteBook,
     forceSync,
     bulkAddBooks,
+    importPaperBooks,
     bulkUpdateBooks,
+    fixYearsFromRegex,
     fixCorruptedTitles,
     clearAllBooks,
     importFromJSON,

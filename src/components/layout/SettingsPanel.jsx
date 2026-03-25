@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react'
 import { Button } from '../ui/Button'
 import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
-import { parseTitlesInBatches, classifyBooksInBatches } from '../../api/anthropic'
+import { parseTitlesInBatches, classifyBooksInBatches, estimateYearsInBatches } from '../../api/anthropic'
 import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
+import { CSVImportModal } from '../books/CSVImportModal'
 
 function formatBytes(bytes) {
   if (!bytes) return '0 Б'
@@ -48,7 +49,9 @@ export function SettingsPanel({
   setBooksFolder,
   books,
   bulkAddBooks,
+  importPaperBooks,
   bulkUpdateBooks,
+  fixYearsFromRegex,
   fixCorruptedTitles,
   clearAllBooks,
   syncStatus,
@@ -61,7 +64,10 @@ export function SettingsPanel({
   const [ops, setOps] = useState({
     parse:    { progress: null, result: null, error: '' },
     classify: { progress: null, result: null, error: '' },
+    yearAI:   { progress: null, result: null, error: '' },
   })
+  const [yearRegexResult, setYearRegexResult] = useState(null)
+  const [csvModalOpen, setCsvModalOpen] = useState(false)
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
@@ -175,14 +181,21 @@ export function SettingsPanel({
     setPendingFile(null)
   }
 
+  const currentYear = new Date().getFullYear()
   const allBooks = books || []
   const corruptedCount  = allBooks.filter(b => b.title?.startsWith('|')).length
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
   const unclassified    = allBooks.filter(b => (!b.legalOrder || b.legalOrder.length === 0) && (!b.topics || b.topics.length === 0)).length
+  const unknownYear     = allBooks.filter(b => !b.year || b.year >= currentYear).length
 
   function handleFixCorrupted() {
     const fixed = fixCorruptedTitles()
     setOp('parse', { result: { count: fixed, fixMsg: true }, error: '' })
+  }
+
+  function handleYearRegex() {
+    const fixed = fixYearsFromRegex()
+    setYearRegexResult(fixed)
   }
 
   function setOp(key, patch) {
@@ -553,6 +566,29 @@ export function SettingsPanel({
               </div>
             )}
 
+            {/* Year from filename (regex, no API) */}
+            <div style={{ padding: '12px 14px', background: '#1a2035', borderRadius: '8px', border: '1px solid #2a3050', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '13px', color: '#ccd6f6', fontWeight: 500 }}>Год из названия файла</div>
+                  <div style={{ fontSize: '11px', color: '#4a5a70', marginTop: '2px' }}>Regex по тексту — мгновенно, без API</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <span style={{ fontSize: '12px', color: unknownYear > 0 ? '#c8a850' : '#3a7a50' }}>
+                    {unknownYear > 0 ? `${unknownYear} кн.` : '✓ готово'}
+                  </span>
+                  <Button variant="secondary" size="sm" onClick={handleYearRegex} disabled={anyRunning || unknownYear === 0}>
+                    ▶
+                  </Button>
+                </div>
+              </div>
+              {yearRegexResult !== null && (
+                <div style={{ marginTop: '6px', fontSize: '12px', color: yearRegexResult > 0 ? '#3a7a50' : '#8899bb' }}>
+                  {yearRegexResult > 0 ? `✅ Найдено и обновлено: ${yearRegexResult}` : 'Год в названиях не найден'}
+                </div>
+              )}
+            </div>
+
             {!anthropicKey && (
               <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'rgba(200,168,80,0.06)', border: '1px solid rgba(200,168,80,0.2)', borderRadius: '8px', fontSize: '12px', color: '#c8a850' }}>
                 Укажите ключ Anthropic API в разделе ниже
@@ -576,6 +612,14 @@ export function SettingsPanel({
                   count: unclassified,
                   batchSize: 30,
                   fn: classifyBooksInBatches,
+                },
+                {
+                  key: 'yearAI',
+                  label: 'Уточнить год (AI)',
+                  hint: 'Для книг без года в названии файла',
+                  count: unknownYear,
+                  batchSize: 40,
+                  fn: estimateYearsInBatches,
                 },
               ].map(({ key, label, hint, count, batchSize, fn }) => {
                 const op = ops[key]
@@ -675,6 +719,9 @@ export function SettingsPanel({
                   📊 Экспорт в CSV (Excel)
                 </Button>
               )}
+              <Button variant="secondary" size="sm" onClick={() => setCsvModalOpen(true)}>
+                📋 Импорт бумажных книг из CSV
+              </Button>
               <Button
                 variant="secondary"
                 size="sm"
@@ -759,6 +806,12 @@ export function SettingsPanel({
           </div>
         </div>
       )}
+
+      <CSVImportModal
+        isOpen={csvModalOpen}
+        onClose={() => setCsvModalOpen(false)}
+        onImport={importPaperBooks}
+      />
     </>
   )
 }
