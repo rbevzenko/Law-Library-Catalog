@@ -228,6 +228,30 @@ export function useLibrary(githubToken) {
     if (githubToken && newBooks) syncToCloud(newBooks)
   }, [githubToken, syncToCloud])
 
+  const fixYearsFromRegex = useCallback(() => {
+    // Extract 4-digit year (1800–last year) from title or yaPath, update books with default year
+    const currentYear = new Date().getFullYear()
+    const yearRe = /\b(1[89]\d{2}|20[012]\d)\b/g
+    const now = new Date().toISOString()
+    let fixed = 0
+    let newBooks
+    setBooks(prev => {
+      newBooks = prev.map(b => {
+        if (b.year && b.year < currentYear) return b // already has a real year
+        const hay = (b.title || '') + ' ' + (b.yaPath || '')
+        const matches = [...hay.matchAll(yearRe)].map(m => parseInt(m[1], 10))
+        if (!matches.length) return b
+        // prefer the last match (publication year usually trails edition/volume info)
+        const year = matches[matches.length - 1]
+        fixed++
+        return { ...b, year, updatedAt: now }
+      })
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+    return fixed
+  }, [githubToken, syncToCloud])
+
   const fixCorruptedTitles = useCallback(() => {
     // Remove leading '|' characters from titles corrupted by a previous parsing bug
     const now = new Date().toISOString()
@@ -279,6 +303,7 @@ export function useLibrary(githubToken) {
     forceSync,
     bulkAddBooks,
     bulkUpdateBooks,
+    fixYearsFromRegex,
     fixCorruptedTitles,
     clearAllBooks,
     importFromJSON,

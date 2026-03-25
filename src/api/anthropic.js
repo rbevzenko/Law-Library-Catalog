@@ -1,5 +1,6 @@
 const PARSE_BATCH_SIZE = 80
 const CLASSIFY_BATCH_SIZE = 30
+const YEAR_BATCH_SIZE = 40
 
 const LEGAL_ORDERS = ['Russia', 'Germany', 'France', 'Netherlands', 'Switzerland', 'Austria', 'England/USA', 'Roman law', 'EU', 'International', 'Spain', 'Italy', 'Other']
 const TOPICS = ['General Civil Law', 'Property Law', 'Contract Law', 'Obligations', 'Tort Law', 'Corporate Law', 'Pledge/Security', 'Invalidity of Transactions', 'Family Law', 'Inheritance Law', 'Procedural Law', 'Comparative Law', 'Legal History', 'Legal Theory', 'Roman Law', 'Bankruptcy', 'Other']
@@ -143,6 +144,52 @@ export async function classifyBooksInBatches(books, apiKey, onProgress) {
     const batch = toProcess.slice(i, i + CLASSIFY_BATCH_SIZE)
     results.push(...await classifyBatch(batch, apiKey))
     if (onProgress) onProgress(Math.min(i + CLASSIFY_BATCH_SIZE, toProcess.length), toProcess.length)
+  }
+  return results
+}
+
+// ── Estimate publication years via AI ────────────────────────────────────────
+// Output: [N] YEAR: 1998   or   [N] YEAR: ?  (if unknown)
+
+const DEFAULT_YEAR = new Date().getFullYear()
+
+async function estimateYearsBatch(books, apiKey) {
+  const prompt = `You are a legal bibliographer with knowledge of Russian and European legal literature.
+For each book below, provide the publication year based on the title and author.
+Only provide a specific year if you are reasonably confident. Use ? if unknown.
+Years must be between 1800 and ${DEFAULT_YEAR - 1}.
+
+Books:
+${books.map((b, i) => `${i + 1}. ${b.title}${b.author ? ` — ${b.author}` : ''}`).join('\n')}
+
+Output format — one line per entry, no extra text:
+[1] YEAR: 1998
+[2] YEAR: ?
+[3] YEAR: 2003`
+
+  const text = await callClaude(apiKey, 'claude-haiku-4-5-20251001', prompt, 2048)
+
+  const results = []
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\[(\d+)\]\s+YEAR:\s*(\?|\d{4})/)
+    if (!m) continue
+    const index = parseInt(m[1], 10) - 1
+    const yearStr = m[2]
+    if (yearStr === '?' || index < 0 || index >= books.length) continue
+    const year = parseInt(yearStr, 10)
+    if (year < 1800 || year >= DEFAULT_YEAR) continue
+    results.push({ id: books[index].id, year })
+  }
+  return results
+}
+
+export async function estimateYearsInBatches(books, apiKey, onProgress) {
+  const toProcess = books.filter(b => !b.year || b.year >= DEFAULT_YEAR)
+  const results = []
+  for (let i = 0; i < toProcess.length; i += YEAR_BATCH_SIZE) {
+    const batch = toProcess.slice(i, i + YEAR_BATCH_SIZE)
+    results.push(...await estimateYearsBatch(batch, apiKey))
+    if (onProgress) onProgress(Math.min(i + YEAR_BATCH_SIZE, toProcess.length), toProcess.length)
   }
   return results
 }
