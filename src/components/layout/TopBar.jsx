@@ -75,7 +75,7 @@ export function TopBar({
           letterSpacing: '0.02em',
           whiteSpace: 'nowrap',
         }}>
-          Lex Bibliotheca
+          Law Library
         </span>
       </div>
 

@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'sql-wasm.wasm'],
       manifest: {
-        name: 'Lex Bibliotheca',
-        short_name: 'Lex',
+        name: 'Law Library',
+        short_name: 'Law Library',
         description: 'Персональный каталог правовой библиотеки',
         theme_color: '#0f1220',
         background_color: '#0f1220',
