@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { StarRating } from '../ui/StarRating'
@@ -73,6 +73,18 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
   const [isbnInput, setIsbnInput] = useState('')
   const [isbnLoading, setIsbnLoading] = useState(false)
   const [isbnError, setIsbnError] = useState('')
+  const [scanOpen, setScanOpen] = useState(false)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
+  const scanningRef = useRef(false)
+  const animFrameRef = useRef(null)
+
+  function doStopScan() {
+    scanningRef.current = false
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
+    setScanOpen(false)
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -86,8 +98,10 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
       setGenError('')
       setIsbnInput('')
       setIsbnError('')
+    } else {
+      doStopScan()
     }
-  }, [isOpen, book])
+  }, [isOpen, book]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function set(key, value) {
     setForm(f => ({ ...f, [key]: value }))
@@ -107,12 +121,12 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
     }
   }
 
-  async function handleISBNLookup() {
-    if (!isbnInput.trim()) return
+  async function applyISBN(isbn) {
+    setIsbnInput(isbn)
     setIsbnLoading(true)
     setIsbnError('')
     try {
-      const found = await fetchByISBN(isbnInput.trim())
+      const found = await fetchByISBN(isbn)
       setForm(f => ({
         ...f,
         title:       found.title       || f.title,
@@ -125,6 +139,52 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
       setIsbnError(err.message)
     } finally {
       setIsbnLoading(false)
+    }
+  }
+
+  function handleISBNLookup() {
+    if (!isbnInput.trim()) return
+    applyISBN(isbnInput.trim())
+  }
+
+  async function handleScanStart() {
+    if (!('BarcodeDetector' in window)) {
+      setIsbnError('Сканирование не поддерживается в этом браузере. Введите ISBN вручную.')
+      return
+    }
+    setIsbnError('')
+    setScanOpen(true)
+    scanningRef.current = true
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      })
+      streamRef.current = stream
+      // wait for videoRef to be in DOM after setScanOpen(true)
+      await new Promise(r => setTimeout(r, 50))
+      if (!videoRef.current) { doStopScan(); return }
+      videoRef.current.srcObject = stream
+      await videoRef.current.play()
+      const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39'] })
+      const loop = async () => {
+        if (!scanningRef.current) return
+        try {
+          const results = await detector.detect(videoRef.current)
+          if (results.length > 0) {
+            const raw = results[0].rawValue.replace(/[^0-9X]/gi, '')
+            if (raw.length === 13 || raw.length === 10) {
+              doStopScan()
+              applyISBN(raw)
+              return
+            }
+          }
+        } catch { /* ignore single-frame errors */ }
+        animFrameRef.current = requestAnimationFrame(loop)
+      }
+      animFrameRef.current = requestAnimationFrame(loop)
+    } catch (err) {
+      doStopScan()
+      setIsbnError('Нет доступа к камере: ' + (err.message || String(err)))
     }
   }
 
@@ -181,18 +241,42 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
                 onChange={e => { setIsbnInput(e.target.value); setIsbnError('') }}
                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleISBNLookup())}
                 placeholder="9780199292042"
-                disabled={isbnLoading}
+                disabled={isbnLoading || scanOpen}
               />
-              <Button
-                variant="secondary"
-                size="sm"
-                type="button"
+              <Button variant="secondary" size="sm" type="button"
                 onClick={handleISBNLookup}
-                disabled={isbnLoading || !isbnInput.trim()}
+                disabled={isbnLoading || scanOpen || !isbnInput.trim()}
               >
                 {isbnLoading ? '⏳' : '🔍 Найти'}
               </Button>
+              <Button variant="secondary" size="sm" type="button"
+                onClick={scanOpen ? doStopScan : handleScanStart}
+                disabled={isbnLoading}
+                style={scanOpen ? { borderColor: 'rgba(200,80,80,0.5)', color: '#e07070' } : {}}
+              >
+                {scanOpen ? '⏹ Стоп' : '📷 Скан'}
+              </Button>
             </div>
+
+            {/* Camera viewfinder */}
+            {scanOpen && (
+              <div style={{ position: 'relative', marginTop: '10px', borderRadius: '8px', overflow: 'hidden', background: '#000', lineHeight: 0 }}>
+                <video
+                  ref={videoRef}
+                  style={{ width: '100%', maxHeight: '220px', objectFit: 'cover', display: 'block' }}
+                  muted
+                  playsInline
+                />
+                {/* Targeting frame */}
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <div style={{ width: '75%', height: '56px', border: '2px solid #c8a850', borderRadius: '4px', boxShadow: '0 0 0 1000px rgba(0,0,0,0.45)' }} />
+                </div>
+                <div style={{ position: 'absolute', bottom: '8px', left: 0, right: 0, textAlign: 'center', fontSize: '12px', color: 'rgba(200,168,80,0.9)', pointerEvents: 'none' }}>
+                  Наведите штрих-код в рамку
+                </div>
+              </div>
+            )}
+
             {isbnError && (
               <div style={{ marginTop: '6px', fontSize: '12px', color: '#e05050' }}>{isbnError}</div>
             )}
