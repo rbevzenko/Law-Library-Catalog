@@ -6,6 +6,7 @@ import { Badge } from '../ui/Badge'
 import { YaDiskBrowser } from '../yadisk/YaDiskBrowser'
 import { LEGAL_ORDERS, TOPICS, TOPIC_COLORS } from '../../constants'
 import { generateDescription } from '../../api/anthropic'
+import { fetchByISBN } from '../../api/isbn'
 
 const emptyBook = {
   title: '', author: '', year: '', legalOrder: [], topics: [],
@@ -69,6 +70,9 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [isbnInput, setIsbnInput] = useState('')
+  const [isbnLoading, setIsbnLoading] = useState(false)
+  const [isbnError, setIsbnError] = useState('')
 
   useEffect(() => {
     if (isOpen) {
@@ -80,6 +84,8 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
         setTagInput('')
       }
       setGenError('')
+      setIsbnInput('')
+      setIsbnError('')
     }
   }, [isOpen, book])
 
@@ -98,6 +104,27 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
     }
     if (e.key === 'Backspace' && !tagInput && form.tags.length > 0) {
       set('tags', form.tags.slice(0, -1))
+    }
+  }
+
+  async function handleISBNLookup() {
+    if (!isbnInput.trim()) return
+    setIsbnLoading(true)
+    setIsbnError('')
+    try {
+      const found = await fetchByISBN(isbnInput.trim())
+      setForm(f => ({
+        ...f,
+        title:       found.title       || f.title,
+        author:      found.author      || f.author,
+        year:        found.year        || f.year,
+        description: found.description || f.description,
+        tags:        found.tags?.length ? found.tags : f.tags,
+      }))
+    } catch (err) {
+      setIsbnError(err.message)
+    } finally {
+      setIsbnLoading(false)
     }
   }
 
@@ -140,6 +167,38 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
       size="xl"
     >
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '8px' }}>
+
+        {/* ISBN lookup */}
+        {!book && (
+          <div style={{ background: 'rgba(200,168,80,0.06)', border: '1px solid rgba(200,168,80,0.2)', borderRadius: '10px', padding: '12px 14px' }}>
+            <div style={{ fontSize: '12px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+              Найти по ISBN
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                style={{ ...inputStyle, flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}
+                value={isbnInput}
+                onChange={e => { setIsbnInput(e.target.value); setIsbnError('') }}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleISBNLookup())}
+                placeholder="9780199292042"
+                disabled={isbnLoading}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={handleISBNLookup}
+                disabled={isbnLoading || !isbnInput.trim()}
+              >
+                {isbnLoading ? '⏳' : '🔍 Найти'}
+              </Button>
+            </div>
+            {isbnError && (
+              <div style={{ marginTop: '6px', fontSize: '12px', color: '#e05050' }}>{isbnError}</div>
+            )}
+          </div>
+        )}
+
         {/* Title & Author */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
