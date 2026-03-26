@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { TopBar } from './components/layout/TopBar'
 import { SettingsPanel } from './components/layout/SettingsPanel'
 import { BookCard } from './components/books/BookCard'
@@ -81,6 +81,73 @@ function EmptyState({ hasFilters, onReset, onAdd }) {
   )
 }
 
+const PAGE_SIZE = 24
+
+function SortButton({ label, sortKey, current, onSort }) {
+  const isAsc  = current === sortKey
+  const isDesc = current === sortKey + '_desc'
+  const active = isAsc || isDesc
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '4px',
+        padding: '5px 12px',
+        background: active ? 'rgba(200,168,80,0.12)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${active ? 'rgba(200,168,80,0.4)' : '#2a3050'}`,
+        borderRadius: '6px',
+        color: active ? '#c8a850' : '#6a7a90',
+        fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s',
+        fontFamily: 'inherit',
+      }}
+    >
+      {label}
+      <span style={{ fontSize: '11px', opacity: active ? 1 : 0.4 }}>
+        {isDesc ? ' ↓' : ' ↑'}
+      </span>
+    </button>
+  )
+}
+
+function Pagination({ page, totalPages, onChange }) {
+  if (totalPages <= 1) return null
+  const pages = []
+  // Always show first, last, and neighbours of current
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= 2) {
+      pages.push(i)
+    }
+  }
+  // Deduplicate and add ellipsis markers
+  const withGaps = []
+  for (let i = 0; i < pages.length; i++) {
+    if (i > 0 && pages[i] - pages[i - 1] > 1) withGaps.push('…')
+    withGaps.push(pages[i])
+  }
+  const btnStyle = (active, disabled) => ({
+    minWidth: '34px', height: '34px',
+    padding: '0 8px',
+    background: active ? '#c8a850' : 'rgba(255,255,255,0.04)',
+    border: `1px solid ${active ? '#c8a850' : '#2a3050'}`,
+    borderRadius: '6px',
+    color: active ? '#0f1220' : disabled ? '#3a4a60' : '#8899bb',
+    fontSize: '13px', fontWeight: active ? 700 : 400,
+    cursor: disabled ? 'default' : 'pointer',
+    transition: 'all 0.15s', fontFamily: 'inherit',
+  })
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '28px' }}>
+      <button style={btnStyle(false, page === 1)} disabled={page === 1} onClick={() => onChange(page - 1)}>‹</button>
+      {withGaps.map((p, i) =>
+        p === '…'
+          ? <span key={'gap' + i} style={{ color: '#3a4a60', fontSize: '13px', padding: '0 2px' }}>…</span>
+          : <button key={p} style={btnStyle(p === page, false)} onClick={() => onChange(p)}>{p}</button>
+      )}
+      <button style={btnStyle(false, page === totalPages)} disabled={page === totalPages} onClick={() => onChange(page + 1)}>›</button>
+    </div>
+  )
+}
+
 function applyFiltersAndSort(books, searchQuery, filters) {
   let result = [...books]
 
@@ -123,12 +190,14 @@ function applyFiltersAndSort(books, searchQuery, filters) {
   // Sort
   const sortKey = filters.sortBy || 'title'
   result.sort((a, b) => {
-    if (sortKey === 'title') return (a.title || '').localeCompare(b.title || '', 'ru')
-    if (sortKey === 'author') return (a.author || '').localeCompare(b.author || '', 'ru')
-    if (sortKey === 'year_asc') return (Number(a.year) || 0) - (Number(b.year) || 0)
-    if (sortKey === 'year_desc') return (Number(b.year) || 0) - (Number(a.year) || 0)
-    if (sortKey === 'rating') return (b.rating || 0) - (a.rating || 0)
-    if (sortKey === 'createdAt') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+    if (sortKey === 'title')       return (a.title || '').localeCompare(b.title || '', 'ru')
+    if (sortKey === 'title_desc')  return (b.title || '').localeCompare(a.title || '', 'ru')
+    if (sortKey === 'author')      return (a.author || '').localeCompare(b.author || '', 'ru')
+    if (sortKey === 'author_desc') return (b.author || '').localeCompare(a.author || '', 'ru')
+    if (sortKey === 'year_asc')    return (Number(a.year) || 0) - (Number(b.year) || 0)
+    if (sortKey === 'year_desc')   return (Number(b.year) || 0) - (Number(a.year) || 0)
+    if (sortKey === 'rating')      return (b.rating || 0) - (a.rating || 0)
+    if (sortKey === 'createdAt')   return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
     return 0
   })
 
@@ -159,6 +228,7 @@ export default function App() {
   const [view, setView] = useState('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
+  const [page, setPage] = useState(1)
   const [settingsOpen, setSettingsOpen] = useState(!yadiskToken)
   const [formOpen, setFormOpen] = useState(false)
   const [editingBook, setEditingBook] = useState(null)
@@ -175,6 +245,22 @@ export default function App() {
     () => applyFiltersAndSort(books, searchQuery, filters),
     [books, searchQuery, filters]
   )
+
+  // Reset page when search/filters change
+  useEffect(() => { setPage(1) }, [searchQuery, filters])
+
+  const totalPages = Math.ceil(filteredBooks.length / PAGE_SIZE)
+  const pagedBooks = useMemo(
+    () => filteredBooks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredBooks, page]
+  )
+
+  const handleSort = useCallback((key) => {
+    setFilters(f => ({
+      ...f,
+      sortBy: f.sortBy === key ? key + '_desc' : key,
+    }))
+  }, [])
 
   function handleAddBook() {
     setEditingBook(null)
@@ -277,6 +363,20 @@ export default function App() {
 
             {/* Main content */}
             <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Sort toolbar */}
+              {initialized && filteredBooks.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: '#4a5a70', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: '4px' }}>
+                    Сортировка:
+                  </span>
+                  <SortButton label="По названию" sortKey="title"  current={filters.sortBy} onSort={handleSort} />
+                  <SortButton label="По автору"   sortKey="author" current={filters.sortBy} onSort={handleSort} />
+                  <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#4a5a70' }}>
+                    {filteredBooks.length} книг · стр. {page} / {totalPages}
+                  </span>
+                </div>
+              )}
+
               {!initialized ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
                   {[1, 2, 3, 4, 5, 6].map(i => <SkeletonCard key={i} />)}
@@ -288,26 +388,32 @@ export default function App() {
                   onAdd={handleAddBook}
                 />
               ) : view === 'table' ? (
-                <div style={{ background: '#151825', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
-                  <BookTable
-                    books={filteredBooks}
-                    onEdit={handleEditBook}
-                    onDelete={handleDeleteBook}
-                    onOpenPDF={handleOpenPDF}
-                  />
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-                  {filteredBooks.map(book => (
-                    <BookCard
-                      key={book.id}
-                      book={book}
+                <>
+                  <div style={{ background: '#151825', border: '1px solid #2a3050', borderRadius: '12px', overflow: 'hidden' }}>
+                    <BookTable
+                      books={pagedBooks}
                       onEdit={handleEditBook}
                       onDelete={handleDeleteBook}
                       onOpenPDF={handleOpenPDF}
                     />
-                  ))}
-                </div>
+                  </div>
+                  <Pagination page={page} totalPages={totalPages} onChange={p => { setPage(p); window.scrollTo(0, 0) }} />
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+                    {pagedBooks.map(book => (
+                      <BookCard
+                        key={book.id}
+                        book={book}
+                        onEdit={handleEditBook}
+                        onDelete={handleDeleteBook}
+                        onOpenPDF={handleOpenPDF}
+                      />
+                    ))}
+                  </div>
+                  <Pagination page={page} totalPages={totalPages} onChange={p => { setPage(p); window.scrollTo(0, 0) }} />
+                </>
               )}
             </div>
           </div>
