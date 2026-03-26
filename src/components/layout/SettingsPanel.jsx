@@ -352,7 +352,7 @@ export function SettingsPanel({
               color: '#e0d8c8',
             }}>
               <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#c8a850' }}>
-                Добро пожаловать в Lex Bibliotheca!
+                Добро пожаловать в Law Library!
               </p>
               <p style={{ margin: 0 }}>
                 Введите токен Яндекс.Диска для начала работы. Каталог будет сохранён в облаке и доступен с любого устройства.

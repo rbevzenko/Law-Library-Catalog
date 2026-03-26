@@ -3,14 +3,22 @@ import { getPublicUrl } from '../../api/yandex'
 import { Button } from '../ui/Button'
 
 export function PDFViewer({ isOpen, onClose, yaPath, token }) {
-  const [loading, setLoading] = useState(false)
+  const [prefetching, setPrefetching] = useState(false)
+  const [publicUrl, setPublicUrl] = useState('')
   const [error, setError] = useState('')
 
+  // Pre-fetch the public URL as soon as viewer opens — must be ready before user tap
+  // so we can open it synchronously (required by iOS popup rules)
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || !token || !yaPath) return
     setError('')
-    setLoading(false)
-  }, [isOpen, yaPath])
+    setPublicUrl('')
+    setPrefetching(true)
+    getPublicUrl(token, yaPath)
+      .then(url => setPublicUrl(url))
+      .catch(err => setError('Не удалось получить ссылку: ' + err.message))
+      .finally(() => setPrefetching(false))
+  }, [isOpen, yaPath, token])
 
   useEffect(() => {
     if (!isOpen) return
@@ -20,23 +28,15 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
   }, [isOpen, onClose])
 
   function handleOpen() {
-    if (!token || !yaPath) return
-    setLoading(true)
-    setError('')
-    // Open blank window immediately on user gesture to avoid popup blocker
-    const win = window.open('', '_blank')
-    if (!win) {
-      setError('Браузер заблокировал всплывающее окно. Разрешите всплывающие окна для этого сайта.')
-      setLoading(false)
-      return
-    }
-    getPublicUrl(token, yaPath)
-      .then(url => { win.location.href = url })
-      .catch(err => {
-        win.close()
-        setError('Не удалось открыть PDF: ' + err.message)
-      })
-      .finally(() => setLoading(false))
+    if (!publicUrl) return
+    // Create <a> and click — works in iOS Safari, iOS PWA standalone, Android, desktop
+    const a = document.createElement('a')
+    a.href = publicUrl
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   if (!isOpen) return null
@@ -75,11 +75,9 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
         }}>
           📄 {yaPath}
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            ✕ Закрыть
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          ✕ Закрыть
+        </Button>
       </div>
 
       {/* Content */}
@@ -95,32 +93,16 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
         <div style={{ fontSize: '64px', lineHeight: 1 }}>📄</div>
 
         <div style={{ textAlign: 'center', maxWidth: '480px' }}>
-          <div style={{
-            color: '#ccd6f6',
-            fontSize: '18px',
-            fontWeight: 600,
-            marginBottom: '8px',
-            wordBreak: 'break-word',
-          }}>
+          <div style={{ color: '#ccd6f6', fontSize: '18px', fontWeight: 600, marginBottom: '8px', wordBreak: 'break-word' }}>
             {fileName}
           </div>
-          <div style={{
-            color: '#5566aa',
-            fontSize: '13px',
-            fontFamily: 'JetBrains Mono, monospace',
-            wordBreak: 'break-all',
-          }}>
+          <div style={{ color: '#5566aa', fontSize: '13px', fontFamily: 'JetBrains Mono, monospace', wordBreak: 'break-all' }}>
             {yaPath}
           </div>
         </div>
 
         {error && (
-          <div style={{
-            color: '#e05050',
-            fontSize: '14px',
-            textAlign: 'center',
-            maxWidth: '400px',
-          }}>
+          <div style={{ color: '#e05050', fontSize: '14px', textAlign: 'center', maxWidth: '400px' }}>
             ❌ {error}
           </div>
         )}
@@ -129,9 +111,9 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
           variant="primary"
           size="lg"
           onClick={handleOpen}
-          disabled={loading}
+          disabled={prefetching || !publicUrl}
         >
-          {loading ? '⏳ Открываем...' : '🔗 Открыть PDF'}
+          {prefetching ? '⏳ Получаем ссылку...' : '🔗 Открыть PDF'}
         </Button>
 
         <div style={{ color: '#445577', fontSize: '12px', textAlign: 'center' }}>
@@ -141,3 +123,4 @@ export function PDFViewer({ isOpen, onClose, yaPath, token }) {
     </div>
   )
 }
+

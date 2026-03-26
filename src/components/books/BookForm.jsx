@@ -78,10 +78,12 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
   const streamRef = useRef(null)
   const scanningRef = useRef(false)
   const animFrameRef = useRef(null)
+  const zxingReaderRef = useRef(null)
 
   function doStopScan() {
     scanningRef.current = false
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null }
+    if (zxingReaderRef.current) { try { zxingReaderRef.current.reset() } catch {} ; zxingReaderRef.current = null }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null }
     setScanOpen(false)
   }
@@ -148,10 +150,6 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
   }
 
   async function handleScanStart() {
-    if (!('BarcodeDetector' in window)) {
-      setIsbnError('Сканирование не поддерживается в этом браузере. Введите ISBN вручную.')
-      return
-    }
     setIsbnError('')
     setScanOpen(true)
     scanningRef.current = true
@@ -165,23 +163,37 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
       if (!videoRef.current) { doStopScan(); return }
       videoRef.current.srcObject = stream
       await videoRef.current.play()
-      const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39'] })
-      const loop = async () => {
-        if (!scanningRef.current) return
-        try {
-          const results = await detector.detect(videoRef.current)
-          if (results.length > 0) {
-            const raw = results[0].rawValue.replace(/[^0-9X]/gi, '')
-            if (raw.length === 13 || raw.length === 10) {
-              doStopScan()
-              applyISBN(raw)
-              return
+
+      if ('BarcodeDetector' in window) {
+        // Native path — Chrome / Edge
+        const detector = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39'] })
+        const loop = async () => {
+          if (!scanningRef.current) return
+          try {
+            const results = await detector.detect(videoRef.current)
+            if (results.length > 0) {
+              const raw = results[0].rawValue.replace(/[^0-9X]/gi, '')
+              if (raw.length === 13 || raw.length === 10) {
+                doStopScan(); applyISBN(raw); return
+              }
             }
-          }
-        } catch { /* ignore single-frame errors */ }
+          } catch { /* ignore single-frame errors */ }
+          animFrameRef.current = requestAnimationFrame(loop)
+        }
         animFrameRef.current = requestAnimationFrame(loop)
+      } else {
+        // ZXing fallback — Safari / iOS / Firefox
+        const { BrowserMultiFormatReader } = await import('@zxing/browser')
+        const reader = new BrowserMultiFormatReader()
+        zxingReaderRef.current = reader
+        reader.decodeFromStream(stream, videoRef.current, (result) => {
+          if (!scanningRef.current || !result) return
+          const raw = result.getText().replace(/[^0-9X]/gi, '')
+          if (raw.length === 13 || raw.length === 10) {
+            doStopScan(); applyISBN(raw)
+          }
+        }).catch(() => {}) // ignore reset/stream-end errors
       }
-      animFrameRef.current = requestAnimationFrame(loop)
     } catch (err) {
       doStopScan()
       setIsbnError('Нет доступа к камере: ' + (err.message || String(err)))
