@@ -33,6 +33,7 @@ export const TOPICS = [
   'Legal Theory',
   'Roman Law',
   'Bankruptcy',
+  'Intellectual Property Law',
   'Other',
 ]
 
@@ -53,6 +54,7 @@ export const TOPIC_COLORS = {
   'Legal Theory': '#5a7a9a',
   'Roman Law': '#c0704a',
   'Bankruptcy': '#6a4ab0',
+  'Intellectual Property Law': '#3a8a7a',
   'Other': '#4a5a70',
 }
 
