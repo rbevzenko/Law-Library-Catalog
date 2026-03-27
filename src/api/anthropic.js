@@ -135,10 +135,7 @@ Output format — two lines per entry, no extra text:
 }
 
 export async function classifyBooksInBatches(books, apiKey, onProgress) {
-  const toProcess = books.filter(b =>
-    (!b.legalOrder || b.legalOrder.length === 0) &&
-    (!b.topics || b.topics.length === 0)
-  )
+  const toProcess = books.filter(b => !b.topics || b.topics.length === 0)
   const results = []
   for (let i = 0; i < toProcess.length; i += CLASSIFY_BATCH_SIZE) {
     const batch = toProcess.slice(i, i + CLASSIFY_BATCH_SIZE)

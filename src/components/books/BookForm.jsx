@@ -64,9 +64,11 @@ function CheckGroup({ options, value, onChange, colorMap }) {
   )
 }
 
-export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, booksFolder }) {
+export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, booksFolder, allTags }) {
   const [form, setForm] = useState(emptyBook)
   const [tagInput, setTagInput] = useState('')
+  const [tagSuggestions, setTagSuggestions] = useState([])
+  const [suggestionIndex, setSuggestionIndex] = useState(-1)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -109,14 +111,45 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
     setForm(f => ({ ...f, [key]: value }))
   }
 
+  function computeSuggestions(input, currentTags) {
+    const q = input.trim().replace(/^#/, '').toLowerCase()
+    if (!q || !allTags?.length) return []
+    return allTags
+      .filter(t => t.toLowerCase().includes(q) && !currentTags.includes(t))
+      .slice(0, 8)
+  }
+
+  function addTag(raw) {
+    const tag = raw.trim().replace(/^#/, '')
+    if (tag && !form.tags.includes(tag)) set('tags', [...form.tags, tag])
+    setTagInput('')
+    setTagSuggestions([])
+    setSuggestionIndex(-1)
+  }
+
+  function handleTagInput(e) {
+    const val = e.target.value
+    setTagInput(val)
+    const s = computeSuggestions(val, form.tags)
+    setTagSuggestions(s)
+    setSuggestionIndex(-1)
+  }
+
   function handleTagKeyDown(e) {
+    if (tagSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestionIndex(i => Math.min(i + 1, tagSuggestions.length - 1)); return }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setSuggestionIndex(i => Math.max(i - 1, -1)); return }
+      if (e.key === 'Escape')    { setTagSuggestions([]); setSuggestionIndex(-1); return }
+      if (e.key === 'Tab')       { e.preventDefault(); addTag(suggestionIndex >= 0 ? tagSuggestions[suggestionIndex] : tagSuggestions[0]); return }
+    }
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault()
-      const tag = tagInput.trim().replace(/^#/, '')
-      if (tag && !form.tags.includes(tag)) {
-        set('tags', [...form.tags, tag])
+      if (suggestionIndex >= 0 && tagSuggestions[suggestionIndex]) {
+        addTag(tagSuggestions[suggestionIndex])
+      } else {
+        addTag(tagInput)
       }
-      setTagInput('')
+      return
     }
     if (e.key === 'Backspace' && !tagInput && form.tags.length > 0) {
       set('tags', form.tags.slice(0, -1))
@@ -399,7 +432,7 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
         </div>
 
         {/* Tags */}
-        <div>
+        <div style={{ position: 'relative' }}>
           <label style={labelStyle}>Теги (Enter или запятая для добавления)</label>
           <div style={{
             display: 'flex',
@@ -409,7 +442,7 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
             padding: '8px 10px',
             background: '#1a2035',
             border: '1px solid #2a3050',
-            borderRadius: '8px',
+            borderRadius: tagSuggestions.length > 0 ? '8px 8px 0 0' : '8px',
             minHeight: '44px',
           }}>
             {form.tags.map(tag => (
@@ -428,8 +461,9 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
             ))}
             <input
               value={tagInput}
-              onChange={e => setTagInput(e.target.value)}
+              onChange={handleTagInput}
               onKeyDown={handleTagKeyDown}
+              onBlur={() => setTimeout(() => { setTagSuggestions([]); setSuggestionIndex(-1) }, 150)}
               placeholder={form.tags.length === 0 ? 'пандектистика, договор...' : ''}
               style={{
                 background: 'none', border: 'none', color: '#e0d8c8',
@@ -438,6 +472,32 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
               }}
             />
           </div>
+
+          {/* Suggestions dropdown */}
+          {tagSuggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+              background: '#1a2035', border: '1px solid #2a3050', borderTop: 'none',
+              borderRadius: '0 0 8px 8px', overflow: 'hidden',
+            }}>
+              {tagSuggestions.map((tag, i) => (
+                <div
+                  key={tag}
+                  onMouseDown={e => { e.preventDefault(); addTag(tag) }}
+                  onMouseEnter={() => setSuggestionIndex(i)}
+                  style={{
+                    padding: '7px 12px', cursor: 'pointer', fontSize: '13px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    background: i === suggestionIndex ? 'rgba(200,168,80,0.12)' : 'transparent',
+                    color: i === suggestionIndex ? '#c8a850' : '#8899bb',
+                    borderTop: i > 0 ? '1px solid rgba(42,48,80,0.5)' : 'none',
+                  }}
+                >
+                  #{tag}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Notes */}

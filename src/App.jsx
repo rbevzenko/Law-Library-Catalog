@@ -246,6 +246,12 @@ export default function App() {
     [books, searchQuery, filters]
   )
 
+  const allTags = useMemo(() => {
+    const set = new Set()
+    books.forEach(b => (b.tags || []).forEach(t => t && set.add(t)))
+    return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [books])
+
   // Reset page when search/filters change
   useEffect(() => { setPage(1) }, [searchQuery, filters])
 
@@ -457,6 +463,7 @@ export default function App() {
         token={yadiskToken}
         anthropicKey={anthropicKey}
         booksFolder={booksFolder}
+        allTags={allTags}
       />
 
       {/* PDF viewer */}

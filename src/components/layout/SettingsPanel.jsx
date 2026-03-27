@@ -187,7 +187,7 @@ export function SettingsPanel({
   const allBooks = books || []
   const corruptedCount  = allBooks.filter(b => b.title?.startsWith('|')).length
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
-  const unclassified    = allBooks.filter(b => (!b.legalOrder || b.legalOrder.length === 0) && (!b.topics || b.topics.length === 0)).length
+  const unclassified    = allBooks.filter(b => !b.topics || b.topics.length === 0).length
   const unknownYear     = allBooks.filter(b => !b.year || b.year >= currentYear).length
 
   function handleFixCorrupted() {
