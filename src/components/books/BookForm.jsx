@@ -64,11 +64,13 @@ function CheckGroup({ options, value, onChange, colorMap }) {
   )
 }
 
-export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, booksFolder, allTags }) {
+export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, booksFolder, allTags, allAuthors }) {
   const [form, setForm] = useState(emptyBook)
   const [tagInput, setTagInput] = useState('')
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [suggestionIndex, setSuggestionIndex] = useState(-1)
+  const [authorSuggestions, setAuthorSuggestions] = useState([])
+  const [authorSuggestionIndex, setAuthorSuggestionIndex] = useState(-1)
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -153,6 +155,29 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
     }
     if (e.key === 'Backspace' && !tagInput && form.tags.length > 0) {
       set('tags', form.tags.slice(0, -1))
+    }
+  }
+
+  function handleAuthorInput(e) {
+    const val = e.target.value
+    set('author', val)
+    if (!val.trim() || !allAuthors?.length) { setAuthorSuggestions([]); return }
+    const q = val.trim().toLowerCase()
+    setAuthorSuggestions(
+      allAuthors.filter(a => a.toLowerCase().includes(q) && a !== val.trim()).slice(0, 8)
+    )
+    setAuthorSuggestionIndex(-1)
+  }
+
+  function handleAuthorKeyDown(e) {
+    if (authorSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setAuthorSuggestionIndex(i => Math.min(i + 1, authorSuggestions.length - 1)); return }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setAuthorSuggestionIndex(i => Math.max(i - 1, -1)); return }
+      if (e.key === 'Escape')    { setAuthorSuggestions([]); setAuthorSuggestionIndex(-1); return }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        const pick = authorSuggestionIndex >= 0 ? authorSuggestions[authorSuggestionIndex] : authorSuggestions[0]
+        if (pick) { e.preventDefault(); set('author', pick); setAuthorSuggestions([]); setAuthorSuggestionIndex(-1) }
+      }
     }
   }
 
@@ -340,15 +365,41 @@ export function BookForm({ isOpen, onClose, book, onSave, token, anthropicKey, b
               required
             />
           </div>
-          <div>
+          <div style={{ position: 'relative' }}>
             <label style={labelStyle}>Автор *</label>
             <input
-              style={inputStyle}
+              style={{ ...inputStyle, borderRadius: authorSuggestions.length > 0 ? '8px 8px 0 0' : '8px' }}
               value={form.author}
-              onChange={e => set('author', e.target.value)}
+              onChange={handleAuthorInput}
+              onKeyDown={handleAuthorKeyDown}
+              onBlur={() => setTimeout(() => { setAuthorSuggestions([]); setAuthorSuggestionIndex(-1) }, 150)}
               placeholder="Фамилия И.О."
               required
             />
+            {authorSuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                background: '#1a2035', border: '1px solid #2a3050', borderTop: 'none',
+                borderRadius: '0 0 8px 8px', overflow: 'hidden',
+              }}>
+                {authorSuggestions.map((author, i) => (
+                  <div
+                    key={author}
+                    onMouseDown={e => { e.preventDefault(); set('author', author); setAuthorSuggestions([]); setAuthorSuggestionIndex(-1) }}
+                    onMouseEnter={() => setAuthorSuggestionIndex(i)}
+                    style={{
+                      padding: '7px 12px', cursor: 'pointer', fontSize: '13px',
+                      background: i === authorSuggestionIndex ? 'rgba(200,168,80,0.12)' : 'transparent',
+                      color: i === authorSuggestionIndex ? '#c8a850' : '#8899bb',
+                      borderTop: i > 0 ? '1px solid rgba(42,48,80,0.5)' : 'none',
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {author}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

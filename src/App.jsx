@@ -252,6 +252,12 @@ export default function App() {
     return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
   }, [books])
 
+  const allAuthors = useMemo(() => {
+    const set = new Set()
+    books.forEach(b => b.author && set.add(b.author.trim()))
+    return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [books])
+
   // Reset page when search/filters change
   useEffect(() => { setPage(1) }, [searchQuery, filters])
 
@@ -464,6 +470,7 @@ export default function App() {
         anthropicKey={anthropicKey}
         booksFolder={booksFolder}
         allTags={allTags}
+        allAuthors={allAuthors}
       />
 
       {/* PDF viewer */}
