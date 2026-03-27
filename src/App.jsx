@@ -148,6 +148,19 @@ function Pagination({ page, totalPages, onChange }) {
   )
 }
 
+// Sort tier: 0 = special/digits, 1 = Latin, 2 = Cyrillic
+function charTier(str) {
+  const ch = (str || '').trimStart()[0] || ''
+  if (/[a-zA-Z]/.test(ch)) return 1
+  if (/[а-яёА-ЯЁ]/.test(ch)) return 2
+  return 0
+}
+function tieredCompare(a, b) {
+  const ta = charTier(a), tb = charTier(b)
+  if (ta !== tb) return ta - tb
+  return a.localeCompare(b, 'ru')
+}
+
 function applyFiltersAndSort(books, searchQuery, filters) {
   let result = [...books]
 
@@ -190,10 +203,10 @@ function applyFiltersAndSort(books, searchQuery, filters) {
   // Sort
   const sortKey = filters.sortBy || 'title'
   result.sort((a, b) => {
-    if (sortKey === 'title')       return (a.title || '').localeCompare(b.title || '', 'ru')
-    if (sortKey === 'title_desc')  return (b.title || '').localeCompare(a.title || '', 'ru')
-    if (sortKey === 'author')      return (a.author || '').localeCompare(b.author || '', 'ru')
-    if (sortKey === 'author_desc') return (b.author || '').localeCompare(a.author || '', 'ru')
+    if (sortKey === 'title')       return tieredCompare(a.title || '', b.title || '')
+    if (sortKey === 'title_desc')  return tieredCompare(b.title || '', a.title || '')
+    if (sortKey === 'author')      return tieredCompare(a.author || '', b.author || '')
+    if (sortKey === 'author_desc') return tieredCompare(b.author || '', a.author || '')
     if (sortKey === 'year_asc')    return (Number(a.year) || 0) - (Number(b.year) || 0)
     if (sortKey === 'year_desc')   return (Number(b.year) || 0) - (Number(a.year) || 0)
     if (sortKey === 'rating')      return (b.rating || 0) - (a.rating || 0)
