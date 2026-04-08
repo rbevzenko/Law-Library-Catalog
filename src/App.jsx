@@ -9,6 +9,8 @@ import { FilterPanel } from './components/filters/FilterPanel'
 import { StatsView } from './components/stats/StatsView'
 import { useSettings } from './hooks/useSettings'
 import { useLibrary } from './hooks/useLibrary'
+import { useAuth } from './hooks/useAuth'
+import { LockScreen } from './components/auth/LockScreen'
 
 const DEFAULT_FILTERS = {
   format: 'all',
@@ -218,6 +220,7 @@ function applyFiltersAndSort(books, searchQuery, filters) {
 }
 
 export default function App() {
+  const { pinSet, unlocked, unlock, setPin, changePin, removePin, lock } = useAuth()
   const { yadiskToken, setYadiskToken, githubToken, setGithubToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
 
   // Read OAuth token from URL hash after Yandex redirect
@@ -336,6 +339,8 @@ export default function App() {
     (filters.topics || []).length > 0 ||
     (filters.format && filters.format !== 'all') ||
     (filters.minRating && filters.minRating > 0)
+
+  if (!unlocked) return <LockScreen onUnlock={unlock} />
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f1220' }}>
@@ -471,6 +476,11 @@ export default function App() {
         exportToJSON={handleExportJSON}
         exportToCSV={exportToCSV}
         importFromJSON={importFromJSON}
+        pinSet={pinSet}
+        onSetPin={setPin}
+        onChangePin={changePin}
+        onRemovePin={removePin}
+        onLock={lock}
       />
 
       {/* Book form modal */}

@@ -61,6 +61,11 @@ export function SettingsPanel({
   exportToJSON,
   exportToCSV,
   importFromJSON,
+  pinSet,
+  onSetPin,
+  onChangePin,
+  onRemovePin,
+  onLock,
 }) {
   const [ops, setOps] = useState({
     parse:    { progress: null, result: null, error: '' },
@@ -70,6 +75,12 @@ export function SettingsPanel({
   const [yearRegexResult, setYearRegexResult] = useState(null)
   const [dedupResult, setDedupResult] = useState(null)
   const [csvModalOpen, setCsvModalOpen] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinConfirm, setPinConfirm] = useState('')
+  const [pinCurrent, setPinCurrent] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinSuccess, setPinSuccess] = useState('')
+  const [pinMode, setPinMode] = useState(null) // 'set' | 'change' | 'remove'
   const [tokenInput, setTokenInput] = useState(yadiskToken || '')
   const [githubTokenInput, setGithubTokenInput] = useState(githubToken || '')
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
@@ -708,6 +719,90 @@ export function SettingsPanel({
           </section>
 
           {/* Export / Import */}
+          {/* PIN protection */}
+          <section>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
+              Код доступа
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ fontSize: '13px', color: '#6a7a90' }}>
+                {pinSet ? '🔒 Код доступа установлен' : '🔓 Код доступа не установлен'}
+              </div>
+
+              {/* PIN form */}
+              {pinMode && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: '#1a2035', borderRadius: '8px', border: '1px solid #2a3050' }}>
+                  {pinMode === 'change' && (
+                    <input
+                      type="password" placeholder="Текущий код" value={pinCurrent}
+                      onChange={e => { setPinCurrent(e.target.value); setPinError('') }}
+                      style={{ padding: '8px 12px', background: '#0f1220', border: '1px solid #2a3050', borderRadius: '6px', color: '#e0d8c8', fontSize: '14px', fontFamily: 'inherit' }}
+                    />
+                  )}
+                  {pinMode !== 'remove' && (
+                    <input
+                      type="password" placeholder="Новый код" value={pinInput}
+                      onChange={e => { setPinInput(e.target.value); setPinError('') }}
+                      style={{ padding: '8px 12px', background: '#0f1220', border: '1px solid #2a3050', borderRadius: '6px', color: '#e0d8c8', fontSize: '14px', fontFamily: 'inherit' }}
+                    />
+                  )}
+                  {pinMode !== 'remove' && (
+                    <input
+                      type="password" placeholder="Повторите код" value={pinConfirm}
+                      onChange={e => { setPinConfirm(e.target.value); setPinError('') }}
+                      style={{ padding: '8px 12px', background: '#0f1220', border: '1px solid #2a3050', borderRadius: '6px', color: '#e0d8c8', fontSize: '14px', fontFamily: 'inherit' }}
+                    />
+                  )}
+                  {pinMode === 'remove' && (
+                    <input
+                      type="password" placeholder="Введите текущий код для подтверждения" value={pinCurrent}
+                      onChange={e => { setPinCurrent(e.target.value); setPinError('') }}
+                      style={{ padding: '8px 12px', background: '#0f1220', border: '1px solid #2a3050', borderRadius: '6px', color: '#e0d8c8', fontSize: '14px', fontFamily: 'inherit' }}
+                    />
+                  )}
+                  {pinError && <div style={{ fontSize: '12px', color: '#e05050' }}>{pinError}</div>}
+                  {pinSuccess && <div style={{ fontSize: '12px', color: '#3a7a50' }}>{pinSuccess}</div>}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Button variant="primary" size="sm" onClick={async () => {
+                      setPinError(''); setPinSuccess('')
+                      if (pinMode === 'set') {
+                        if (!pinInput.trim()) return setPinError('Введите код')
+                        if (pinInput !== pinConfirm) return setPinError('Коды не совпадают')
+                        await onSetPin(pinInput)
+                        setPinSuccess('Код установлен'); setPinInput(''); setPinConfirm(''); setPinMode(null)
+                      } else if (pinMode === 'change') {
+                        if (!pinInput.trim()) return setPinError('Введите новый код')
+                        if (pinInput !== pinConfirm) return setPinError('Коды не совпадают')
+                        const ok = await onChangePin(pinCurrent, pinInput)
+                        if (!ok) return setPinError('Неверный текущий код')
+                        setPinSuccess('Код изменён'); setPinInput(''); setPinConfirm(''); setPinCurrent(''); setPinMode(null)
+                      } else if (pinMode === 'remove') {
+                        if (!pinCurrent.trim()) return setPinError('Введите текущий код')
+                        const ok = await onRemovePin(pinCurrent)
+                        if (!ok) return setPinError('Неверный код')
+                        setPinSuccess('Код удалён'); setPinCurrent(''); setPinMode(null)
+                      }
+                    }}>
+                      {pinMode === 'remove' ? 'Удалить' : 'Сохранить'}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setPinMode(null); setPinInput(''); setPinConfirm(''); setPinCurrent(''); setPinError(''); setPinSuccess('') }}>
+                      Отмена
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!pinMode && (
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {!pinSet && <Button variant="secondary" size="sm" onClick={() => setPinMode('set')}>Установить код</Button>}
+                  {pinSet  && <Button variant="secondary" size="sm" onClick={() => setPinMode('change')}>Изменить код</Button>}
+                  {pinSet  && <Button variant="secondary" size="sm" onClick={() => setPinMode('remove')}>Удалить код</Button>}
+                  {pinSet  && <Button variant="secondary" size="sm" onClick={onLock}>🔒 Заблокировать</Button>}
+                </div>
+              )}
+            </div>
+          </section>
+
           <section>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#8899bb', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'system-ui' }}>
               Экспорт / Импорт
