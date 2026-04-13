@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { downloadCatalogFromGist, uploadCatalogToGist } from '../api/github'
 const LOCAL_KEY = 'lex-bibliotheca-catalog'
@@ -22,7 +22,9 @@ function loadLocal() {
   }
 }
 
-// Merge: last-write-wins by updatedAt
+// Merge: last-write-wins by updatedAt.
+// Tombstones (deletedAt set) participate in the merge just like live books —
+// a tombstone with a newer updatedAt beats a remote live copy, so deletes propagate.
 function mergeBooks(a, b) {
   const map = new Map()
   for (const book of b) map.set(book.id, book)
@@ -40,17 +42,21 @@ function mergeBooks(a, b) {
 }
 
 export function useLibrary(githubToken) {
-  const [books, setBooks] = useState(() => loadLocal() || [])
+  // rawBooks includes tombstones (deletedAt set); persisted to localStorage and cloud
+  const [rawBooks, setBooks] = useState(() => loadLocal() || [])
   const [syncStatus, setSyncStatus] = useState('idle')
   const [syncError, setSyncError] = useState('')
   const [lastSyncedAt, setLastSyncedAt] = useState(null)
   const [initialized, setInitialized] = useState(false)
   const successTimerRef = useRef(null)
 
-  // Persist to localStorage on every change
+  // Visible books: tombstones are excluded from the UI
+  const books = useMemo(() => rawBooks.filter(b => !b.deletedAt), [rawBooks])
+
+  // Persist rawBooks (with tombstones) so deletes survive across sessions and sync correctly
   useEffect(() => {
-    saveLocal(books)
-  }, [books])
+    saveLocal(rawBooks)
+  }, [rawBooks])
 
   const markSuccess = useCallback(() => {
     setSyncStatus('success')
@@ -77,7 +83,7 @@ export function useLibrary(githubToken) {
           setBooks(prev => mergeBooks(prev, cloudData))
         } else if (cloudData === null) {
           // No gist yet — upload current local data to create it
-          const currentBooks = loadLocal() || SEED_BOOKS
+          const currentBooks = loadLocal() || []
           await uploadCatalogToGist(githubToken, currentBooks)
         }
 
@@ -147,10 +153,13 @@ export function useLibrary(githubToken) {
     if (githubToken && newBooks) syncToCloud(newBooks)
   }, [githubToken, syncToCloud])
 
+  // Soft delete: mark with deletedAt so the tombstone beats the cloud copy in mergeBooks.
+  // Hard removal would make mergeBooks treat the remote copy as "new" and resurrect the book.
   const deleteBook = useCallback(async (id) => {
+    const now = new Date().toISOString()
     let newBooks
     setBooks(prev => {
-      newBooks = prev.filter(b => b.id !== id)
+      newBooks = prev.map(b => b.id === id ? { ...b, deletedAt: now, updatedAt: now } : b)
       return newBooks
     })
     if (githubToken && newBooks) syncToCloud(newBooks)
@@ -197,15 +206,17 @@ export function useLibrary(githubToken) {
     let addedCount = 0
     let updated
     setBooks(prev => {
-      const seenPaths  = new Set(prev.map(b => b.yaPath).filter(Boolean))
-      const seenTitles = new Set(prev.map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      // Deduplicate against live books only (not tombstones)
+      const live = prev.filter(b => !b.deletedAt)
+      const seenPaths  = new Set(live.map(b => b.yaPath).filter(Boolean))
+      const seenTitles = new Set(live.map(b => b.title.trim().toLowerCase()).filter(Boolean))
       const toAdd = []
       for (const b of newBooks) {
         if (b.yaPath && seenPaths.has(b.yaPath)) continue
         const key = b.title.trim().toLowerCase()
         if (seenTitles.has(key)) continue
         if (b.yaPath) seenPaths.add(b.yaPath)
-        seenTitles.add(key)   // deduplicate within the incoming batch too
+        seenTitles.add(key)
         toAdd.push(b)
       }
       addedCount = toAdd.length
@@ -220,14 +231,17 @@ export function useLibrary(githubToken) {
     let addedCount = 0
     let updated
     setBooks(prev => {
-      // Only deduplicate against existing paper books — PDFs are separate entries
-      const seen = new Set(prev.filter(b => b.format === 'paper').map(b => b.title.trim().toLowerCase()).filter(Boolean))
+      // Deduplicate against live paper books only (not tombstones)
+      const seen = new Set(
+        prev.filter(b => b.format === 'paper' && !b.deletedAt)
+          .map(b => b.title.trim().toLowerCase()).filter(Boolean)
+      )
       const toAdd = []
       for (const b of books) {
         if (!b.title) continue
         const key = b.title.trim().toLowerCase()
         if (seen.has(key)) continue
-        seen.add(key)   // deduplicate within the incoming batch too
+        seen.add(key)
         toAdd.push(b)
       }
       addedCount = toAdd.length
@@ -239,12 +253,12 @@ export function useLibrary(githubToken) {
   }, [githubToken, syncToCloud])
 
   const bulkUpdateBooks = useCallback((updates) => {
-    // updates: [{id, ...anyFields}] — patches each matched book with given fields
     const now = new Date().toISOString()
     const updateMap = new Map(updates.map(u => [u.id, u]))
     let newBooks
     setBooks(prev => {
       newBooks = prev.map(b => {
+        if (b.deletedAt) return b // skip tombstones
         const u = updateMap.get(b.id)
         if (!u) return b
         const { id: _id, ...fields } = u
@@ -256,7 +270,6 @@ export function useLibrary(githubToken) {
   }, [githubToken, syncToCloud])
 
   const fixYearsFromRegex = useCallback(() => {
-    // Extract 4-digit year (1800–last year) from title or yaPath, update books with default year
     const currentYear = new Date().getFullYear()
     const yearRe = /\b(1[89]\d{2}|20[012]\d)\b/g
     const now = new Date().toISOString()
@@ -264,11 +277,11 @@ export function useLibrary(githubToken) {
     let newBooks
     setBooks(prev => {
       newBooks = prev.map(b => {
-        if (b.year && b.year < currentYear) return b // already has a real year
+        if (b.deletedAt) return b // skip tombstones
+        if (b.year && b.year < currentYear) return b
         const hay = (b.title || '') + ' ' + (b.yaPath || '')
         const matches = [...hay.matchAll(yearRe)].map(m => parseInt(m[1], 10))
         if (!matches.length) return b
-        // prefer the last match (publication year usually trails edition/volume info)
         const year = matches[matches.length - 1]
         fixed++
         return { ...b, year, updatedAt: now }
@@ -279,14 +292,60 @@ export function useLibrary(githubToken) {
     return fixed
   }, [githubToken, syncToCloud])
 
+  const fixExcelImport = useCallback(() => {
+    // Pattern from Excel CSV export: "Инициалы;Название книги;Город издания"
+    // Structure: parts[0] = initials (Г.Ф.), parts[1..n-1] = title, parts[last] = city
+    // When initials detected and 3+ parts → last part is ALWAYS city, remove unconditionally.
+    //
+    // Initials: strictly one or more groups of "Capital letter + dot", e.g. Г., Г.Ф., В.И.А.
+    const INITIALS_RE = /^([А-ЯЁA-Z]\.){1,4}$/
+    const isInitials = s => INITIALS_RE.test(s.trim())
+
+    const now = new Date().toISOString()
+    let stats = { fixed: 0, initialsAdded: 0, citiesRemoved: 0 }
+    let newBooks
+    setBooks(prev => {
+      stats = { fixed: 0, initialsAdded: 0, citiesRemoved: 0 }
+      newBooks = prev.map(b => {
+        if (b.deletedAt) return b // skip tombstones
+        if (!b.title || !b.title.includes(';')) return b
+        const parts = b.title.split(';').map(p => p.trim()).filter(Boolean)
+        if (parts.length < 2) return b
+
+        if (!isInitials(parts[0])) return b
+
+        const initials = parts[0]
+        let titleParts = parts.slice(1)
+
+        if (titleParts.length >= 2) {
+          titleParts = titleParts.slice(0, -1)
+          stats.citiesRemoved++
+        }
+
+        let newAuthor = b.author || ''
+        if (!newAuthor.includes(initials)) {
+          newAuthor = newAuthor ? `${newAuthor} ${initials}` : initials
+          stats.initialsAdded++
+        }
+
+        stats.fixed++
+        return { ...b, title: titleParts.join('; '), author: newAuthor, updatedAt: now }
+      })
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+    return stats
+  }, [githubToken, syncToCloud])
+
   const removeDuplicates = useCallback(() => {
-    // For each group of books with the same title (case-insensitive),
-    // keep the one with the most filled-in fields, remove the rest.
     let removed = 0
     let newBooks
     setBooks(prev => {
+      // Keep tombstones as-is; dedup only live books
+      const tombstones = prev.filter(b => b.deletedAt)
+      const alive = prev.filter(b => !b.deletedAt)
       const groups = new Map()
-      for (const b of prev) {
+      for (const b of alive) {
         const key = (b.title || '').trim().toLowerCase()
         if (!groups.has(key)) groups.set(key, [])
         groups.get(key).push(b)
@@ -295,12 +354,13 @@ export function useLibrary(githubToken) {
         b.author, b.description, b.notes, b.yaPath,
         ...(b.legalOrder || []), ...(b.topics || []), ...(b.tags || []),
       ].filter(Boolean).length + (b.rating ? 1 : 0) + (b.year && b.year < new Date().getFullYear() ? 1 : 0)
-      newBooks = []
+      const deduped = []
       for (const group of groups.values()) {
         const best = group.reduce((a, b) => score(b) > score(a) ? b : a)
-        newBooks.push(best)
+        deduped.push(best)
         removed += group.length - 1
       }
+      newBooks = [...tombstones, ...deduped]
       return newBooks
     })
     if (githubToken && newBooks) syncToCloud(newBooks)
@@ -308,12 +368,12 @@ export function useLibrary(githubToken) {
   }, [githubToken, syncToCloud])
 
   const fixCorruptedTitles = useCallback(() => {
-    // Remove leading '|' characters from titles corrupted by a previous parsing bug
     const now = new Date().toISOString()
     let fixed = 0
     let newBooks
     setBooks(prev => {
       newBooks = prev.map(b => {
+        if (b.deletedAt) return b // skip tombstones
         if (!b.title || !b.title.startsWith('|')) return b
         fixed++
         return { ...b, title: b.title.replace(/^\|+/, '').trim(), updatedAt: now }
@@ -330,6 +390,7 @@ export function useLibrary(githubToken) {
     if (githubToken) syncToCloud([])
   }, [githubToken, syncToCloud])
 
+  // Export only visible (non-deleted) books
   const exportToJSON = useCallback(() => {
     return JSON.stringify(books, null, 2)
   }, [books])
@@ -360,6 +421,7 @@ export function useLibrary(githubToken) {
     importPaperBooks,
     bulkUpdateBooks,
     fixYearsFromRegex,
+    fixExcelImport,
     fixCorruptedTitles,
     removeDuplicates,
     clearAllBooks,

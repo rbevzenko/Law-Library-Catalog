@@ -238,7 +238,7 @@ export default function App() {
   const {
     books, syncStatus, syncError, lastSyncedAt, initialized,
     addBook, updateBook, deleteBook, forceSync,
-    bulkAddBooks, importPaperBooks, bulkUpdateBooks, fixYearsFromRegex, fixCorruptedTitles, removeDuplicates, clearAllBooks, exportToJSON, exportToCSV, importFromJSON,
+    bulkAddBooks, importPaperBooks, bulkUpdateBooks, fixYearsFromRegex, fixExcelImport, fixCorruptedTitles, removeDuplicates, clearAllBooks, exportToJSON, exportToCSV, importFromJSON,
   } = useLibrary(githubToken)
 
   const [view, setView] = useState('grid')
@@ -467,6 +467,7 @@ export default function App() {
         importPaperBooks={importPaperBooks}
         bulkUpdateBooks={bulkUpdateBooks}
         fixYearsFromRegex={fixYearsFromRegex}
+        fixExcelImport={fixExcelImport}
         fixCorruptedTitles={fixCorruptedTitles}
         removeDuplicates={removeDuplicates}
         clearAllBooks={clearAllBooks}
