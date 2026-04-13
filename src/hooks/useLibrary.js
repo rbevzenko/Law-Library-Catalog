@@ -280,10 +280,14 @@ export function useLibrary(githubToken) {
   }, [githubToken, syncToCloud])
 
   const fixExcelImport = useCallback(() => {
-    // Detect pattern: "Инициалы;Название книги;Город" in title field
-    // Move initials to author, keep only title, strip city
-    const isInitials = s => /^[A-ZА-ЯЁ][a-zа-яё]{0,3}\.([A-ZА-ЯЁ][a-zа-яё]{0,3}\.)?$/.test(s.trim())
-    const isCity    = s => { const t = s.trim(); return t.length <= 8 && t.endsWith('.') }
+    // Pattern from Excel CSV export: "Инициалы;Название книги;Город издания"
+    // Structure: parts[0] = initials (Г.Ф.), parts[1..n-1] = title, parts[last] = city
+    // When initials detected and 3+ parts → last part is ALWAYS city, remove unconditionally.
+    //
+    // Initials: strictly one or more groups of "Capital letter + dot", e.g. Г., Г.Ф., В.И.А.
+    const INITIALS_RE = /^([А-ЯЁA-Z]\.){1,4}$/
+    const isInitials = s => INITIALS_RE.test(s.trim())
+
     const now = new Date().toISOString()
     let stats = { fixed: 0, initialsAdded: 0, citiesRemoved: 0 }
     let newBooks
@@ -293,25 +297,26 @@ export function useLibrary(githubToken) {
         if (!b.title || !b.title.includes(';')) return b
         const parts = b.title.split(';').map(p => p.trim()).filter(Boolean)
         if (parts.length < 2) return b
-        let titleParts = [...parts]
-        let newAuthor = b.author || ''
-        let changed = false
-        // Strip leading initials
-        if (isInitials(titleParts[0])) {
-          const initials = titleParts.shift()
-          if (!newAuthor.includes(initials)) {
-            newAuthor = newAuthor ? `${newAuthor} ${initials}` : initials
-            stats.initialsAdded++
-          }
-          changed = true
-        }
-        // Strip trailing city abbreviation
-        if (titleParts.length > 1 && isCity(titleParts[titleParts.length - 1])) {
-          titleParts.pop()
+
+        // Only process rows where first part is initials
+        if (!isInitials(parts[0])) return b
+
+        const initials = parts[0]
+        let titleParts = parts.slice(1) // everything after initials
+
+        // When 3+ total parts: last part is the publishing city → always remove it
+        if (titleParts.length >= 2) {
+          titleParts = titleParts.slice(0, -1)
           stats.citiesRemoved++
-          changed = true
         }
-        if (!changed) return b
+
+        // Append initials to existing author (last name already in author field)
+        let newAuthor = b.author || ''
+        if (!newAuthor.includes(initials)) {
+          newAuthor = newAuthor ? `${newAuthor} ${initials}` : initials
+          stats.initialsAdded++
+        }
+
         stats.fixed++
         return { ...b, title: titleParts.join('; '), author: newAuthor, updatedAt: now }
       })

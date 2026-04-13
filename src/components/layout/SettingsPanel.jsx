@@ -199,7 +199,11 @@ export function SettingsPanel({
   const currentYear = new Date().getFullYear()
   const allBooks = books || []
   const corruptedCount  = allBooks.filter(b => b.title?.startsWith('|')).length
-  const excelImportCount = allBooks.filter(b => b.title?.includes(';')).length
+  const excelImportCount = allBooks.filter(b => {
+    if (!b.title?.includes(';')) return false
+    const first = b.title.split(';')[0].trim()
+    return /^([А-ЯЁA-Z]\.){1,4}$/.test(first)
+  }).length
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
   const unclassified    = allBooks.filter(b => !b.topics || b.topics.length === 0).length
   const unknownYear     = allBooks.filter(b => !b.year || b.year >= currentYear).length
