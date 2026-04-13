@@ -52,6 +52,7 @@ export function SettingsPanel({
   importPaperBooks,
   bulkUpdateBooks,
   fixYearsFromRegex,
+  fixExcelImport,
   fixCorruptedTitles,
   removeDuplicates,
   clearAllBooks,
@@ -73,6 +74,7 @@ export function SettingsPanel({
     yearAI:   { progress: null, result: null, error: '' },
   })
   const [yearRegexResult, setYearRegexResult] = useState(null)
+  const [excelImportResult, setExcelImportResult] = useState(null)
   const [dedupResult, setDedupResult] = useState(null)
   const [csvModalOpen, setCsvModalOpen] = useState(false)
   const [pinInput, setPinInput] = useState('')
@@ -197,6 +199,7 @@ export function SettingsPanel({
   const currentYear = new Date().getFullYear()
   const allBooks = books || []
   const corruptedCount  = allBooks.filter(b => b.title?.startsWith('|')).length
+  const excelImportCount = allBooks.filter(b => b.title?.includes(';')).length
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
   const unclassified    = allBooks.filter(b => !b.topics || b.topics.length === 0).length
   const unknownYear     = allBooks.filter(b => !b.year || b.year >= currentYear).length
@@ -209,6 +212,11 @@ export function SettingsPanel({
   function handleYearRegex() {
     const fixed = fixYearsFromRegex()
     setYearRegexResult(fixed)
+  }
+
+  function handleExcelImport() {
+    const stats = fixExcelImport()
+    setExcelImportResult(stats)
   }
 
   function setOp(key, patch) {
@@ -578,6 +586,31 @@ export function SettingsPanel({
                 </Button>
               </div>
             )}
+
+            {/* Fix Excel import (semicolon-separated Initials;Title;City) */}
+            <div style={{ padding: '12px 14px', background: '#1a2035', borderRadius: '8px', border: '1px solid #2a3050', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: '13px', color: '#ccd6f6', fontWeight: 500 }}>Исправить импорт из Excel</div>
+                  <div style={{ fontSize: '11px', color: '#4a5a70', marginTop: '2px' }}>Инициалы;Название;Город → отдельные поля</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                  <span style={{ fontSize: '12px', color: excelImportCount > 0 ? '#c8a850' : '#3a7a50' }}>
+                    {excelImportCount > 0 ? `${excelImportCount} кн.` : '✓ готово'}
+                  </span>
+                  <Button variant="secondary" size="sm" onClick={handleExcelImport} disabled={excelImportCount === 0}>
+                    ▶
+                  </Button>
+                </div>
+              </div>
+              {excelImportResult !== null && (
+                <div style={{ marginTop: '6px', fontSize: '12px', color: excelImportResult.fixed > 0 ? '#3a7a50' : '#8899bb' }}>
+                  {excelImportResult.fixed > 0
+                    ? `✅ Исправлено: ${excelImportResult.fixed} кн. · инициалов перенесено: ${excelImportResult.initialsAdded} · городов удалено: ${excelImportResult.citiesRemoved}`
+                    : 'Книги с форматом Excel не найдены'}
+                </div>
+              )}
+            </div>
 
             {/* Year from filename (regex, no API) */}
             <div style={{ padding: '12px 14px', background: '#1a2035', borderRadius: '8px', border: '1px solid #2a3050', marginBottom: '4px' }}>

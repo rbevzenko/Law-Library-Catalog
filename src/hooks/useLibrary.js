@@ -279,9 +279,49 @@ export function useLibrary(githubToken) {
     return fixed
   }, [githubToken, syncToCloud])
 
+  const fixExcelImport = useCallback(() => {
+    // Detect pattern: "Инициалы;Название книги;Город" in title field
+    // Move initials to author, keep only title, strip city
+    const isInitials = s => /^[A-ZА-ЯЁ][a-zа-яё]{0,3}\.([A-ZА-ЯЁ][a-zа-яё]{0,3}\.)?$/.test(s.trim())
+    const isCity    = s => { const t = s.trim(); return t.length <= 8 && t.endsWith('.') }
+    const now = new Date().toISOString()
+    let stats = { fixed: 0, initialsAdded: 0, citiesRemoved: 0 }
+    let newBooks
+    setBooks(prev => {
+      stats = { fixed: 0, initialsAdded: 0, citiesRemoved: 0 }
+      newBooks = prev.map(b => {
+        if (!b.title || !b.title.includes(';')) return b
+        const parts = b.title.split(';').map(p => p.trim()).filter(Boolean)
+        if (parts.length < 2) return b
+        let titleParts = [...parts]
+        let newAuthor = b.author || ''
+        let changed = false
+        // Strip leading initials
+        if (isInitials(titleParts[0])) {
+          const initials = titleParts.shift()
+          if (!newAuthor.includes(initials)) {
+            newAuthor = newAuthor ? `${newAuthor} ${initials}` : initials
+            stats.initialsAdded++
+          }
+          changed = true
+        }
+        // Strip trailing city abbreviation
+        if (titleParts.length > 1 && isCity(titleParts[titleParts.length - 1])) {
+          titleParts.pop()
+          stats.citiesRemoved++
+          changed = true
+        }
+        if (!changed) return b
+        stats.fixed++
+        return { ...b, title: titleParts.join('; '), author: newAuthor, updatedAt: now }
+      })
+      return newBooks
+    })
+    if (githubToken && newBooks) syncToCloud(newBooks)
+    return stats
+  }, [githubToken, syncToCloud])
+
   const removeDuplicates = useCallback(() => {
-    // For each group of books with the same title (case-insensitive),
-    // keep the one with the most filled-in fields, remove the rest.
     let removed = 0
     let newBooks
     setBooks(prev => {
@@ -360,6 +400,7 @@ export function useLibrary(githubToken) {
     importPaperBooks,
     bulkUpdateBooks,
     fixYearsFromRegex,
+    fixExcelImport,
     fixCorruptedTitles,
     removeDuplicates,
     clearAllBooks,
