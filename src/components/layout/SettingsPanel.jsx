@@ -202,7 +202,7 @@ export function SettingsPanel({
   const excelImportCount = allBooks.filter(b => {
     if (!b.title?.includes(';')) return false
     const first = b.title.split(';')[0].trim()
-    return /^([А-ЯЁA-Z]\.){1,4}$/.test(first)
+    return /^([\u0410-\u042F\u0401A-Z]\.){1,4}$/.test(first)
   }).length
   const unparsedCount   = allBooks.filter(b => !b.author || b.author.trim() === '').length
   const unclassified    = allBooks.filter(b => !b.topics || b.topics.length === 0).length

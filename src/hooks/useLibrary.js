@@ -22,9 +22,8 @@ function loadLocal() {
   }
 }
 
-// Merge: last-write-wins by updatedAt.
-// Tombstones (deletedAt set) participate in the merge just like live books —
-// a tombstone with a newer updatedAt beats a remote live copy, so deletes propagate.
+// Merge: tombstone always beats live; among same-type entries last-write-wins by updatedAt.
+// Using explicit tombstone priority ensures deletes propagate even if timestamps collide.
 function mergeBooks(a, b) {
   const map = new Map()
   for (const book of b) map.set(book.id, book)
@@ -33,9 +32,19 @@ function mergeBooks(a, b) {
     if (!remote) {
       map.set(book.id, book)
     } else {
-      const tA = new Date(book.updatedAt || 0).getTime()
-      const tB = new Date(remote.updatedAt || 0).getTime()
-      if (tA >= tB) map.set(book.id, book)
+      const localDeleted  = !!book.deletedAt
+      const remoteDeleted = !!remote.deletedAt
+      if (localDeleted && !remoteDeleted) {
+        // Local tombstone always beats remote live entry
+        map.set(book.id, book)
+      } else if (!localDeleted && remoteDeleted) {
+        // Remote tombstone wins — keep what's already in map
+      } else {
+        // Both same type: last-write-wins by updatedAt
+        const tA = new Date(book.updatedAt || 0).getTime()
+        const tB = new Date(remote.updatedAt || 0).getTime()
+        if (tA >= tB) map.set(book.id, book)
+      }
     }
   }
   return Array.from(map.values())
@@ -298,7 +307,8 @@ export function useLibrary(githubToken) {
     // When initials detected and 3+ parts → last part is ALWAYS city, remove unconditionally.
     //
     // Initials: strictly one or more groups of "Capital letter + dot", e.g. Г., Г.Ф., В.И.А.
-    const INITIALS_RE = /^([А-ЯЁA-Z]\.){1,4}$/
+    // \u0410-\u042F = А-Я, \u0401 = Ё — explicit codepoints avoid encoding ambiguity
+    const INITIALS_RE = /^([\u0410-\u042F\u0401A-Z]\.){1,4}$/
     const isInitials = s => INITIALS_RE.test(s.trim())
 
     const now = new Date().toISOString()
