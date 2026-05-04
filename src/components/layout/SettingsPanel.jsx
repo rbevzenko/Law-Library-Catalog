@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Button } from '../ui/Button'
 import { getDiskInfo, fetchAllPDFs } from '../../api/yandex'
 import { parseTitlesInBatches, classifyBooksInBatches, estimateYearsInBatches } from '../../api/anthropic'
@@ -88,6 +88,11 @@ export function SettingsPanel({
   const [clientIdInput, setClientIdInput] = useState(() => localStorage.getItem('lex_ya_client_id') || '')
   const [keyInput, setKeyInput] = useState(anthropicKey || '')
   const [folderInput, setFolderInput] = useState(booksFolder || '')
+
+  // Sync input fields when tokens load asynchronously (e.g. after decryption)
+  useEffect(() => { if (yadiskToken) setTokenInput(yadiskToken) }, [yadiskToken])
+  useEffect(() => { if (githubToken) setGithubTokenInput(githubToken) }, [githubToken])
+  useEffect(() => { if (anthropicKey) setKeyInput(anthropicKey) }, [anthropicKey])
   const [diskInfo, setDiskInfo] = useState(null)
   const [diskError, setDiskError] = useState('')
   const [checking, setChecking] = useState(false)

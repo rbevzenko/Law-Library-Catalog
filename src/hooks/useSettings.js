@@ -43,7 +43,14 @@ export function useSettings(cryptoKey, pinSet) {
         setAnthropicKeyState(ak)
       })
     } else if (!pinSet) {
-      // No PIN: use sessionStorage (cleared when browser tab closes)
+      // No PIN: use sessionStorage. Migrate any legacy plaintext values from localStorage.
+      for (const keys of Object.values(ENC)) {
+        const plain = localStorage.getItem(keys.plain)
+        if (plain && !sessionStorage.getItem(keys.session)) {
+          sessionStorage.setItem(keys.session, plain)
+          localStorage.removeItem(keys.plain)
+        }
+      }
       setYadiskTokenState(sessionStorage.getItem(ENC.yadiskToken.session) || '')
       setGithubTokenState(sessionStorage.getItem(ENC.githubToken.session) || '')
       setAnthropicKeyState(sessionStorage.getItem(ENC.anthropicKey.session) || '')
