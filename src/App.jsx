@@ -220,8 +220,20 @@ function applyFiltersAndSort(books, searchQuery, filters) {
 }
 
 export default function App() {
-  const { pinSet, unlocked, unlock, setPin, changePin, removePin, lock } = useAuth()
-  const { yadiskToken, setYadiskToken, githubToken, setGithubToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder } = useSettings()
+  const { pinSet, unlocked, unlock, setPin, changePin, removePin, lock, cryptoKey } = useAuth()
+  const { yadiskToken, setYadiskToken, githubToken, setGithubToken, anthropicKey, setAnthropicKey, booksFolder, setBooksFolder, reEncryptTokens, migrateToSession } = useSettings(cryptoKey, pinSet)
+
+  async function handleChangePin(currentPin, newPin) {
+    const newKey = await changePin(currentPin, newPin)
+    if (newKey) await reEncryptTokens(newKey)
+    return !!newKey
+  }
+
+  async function handleRemovePin(pin) {
+    const ok = await removePin(pin)
+    if (ok) migrateToSession()
+    return ok
+  }
 
   // Read OAuth token from URL hash after Yandex redirect
   useEffect(() => {
@@ -479,8 +491,8 @@ export default function App() {
         importFromJSON={importFromJSON}
         pinSet={pinSet}
         onSetPin={setPin}
-        onChangePin={changePin}
-        onRemovePin={removePin}
+        onChangePin={handleChangePin}
+        onRemovePin={handleRemovePin}
         onLock={lock}
       />
 
