@@ -3,6 +3,10 @@ const GIST_DESCRIPTION = 'Lex Bibliotheca Catalog'
 const GIST_FILENAME = 'catalog.json'
 
 function gistHeaders(token) {
+  // HTTP headers only allow ISO-8859-1; GitHub tokens are pure ASCII
+  if (!/^[\x20-\x7E]+$/.test(token)) {
+    throw new Error('Токен содержит недопустимые символы. Скопируйте токен заново (ghp_...).')
+  }
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',

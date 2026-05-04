@@ -78,6 +78,7 @@ export function SettingsPanel({
   const [excelImportResult, setExcelImportResult] = useState(null)
   const [dedupResult, setDedupResult] = useState(null)
   const [csvModalOpen, setCsvModalOpen] = useState(false)
+  const [githubTokenError, setGithubTokenError] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [pinCurrent, setPinCurrent] = useState('')
@@ -127,7 +128,13 @@ export function SettingsPanel({
   }
 
   function handleSaveGithubToken() {
-    setGithubToken(githubTokenInput.trim())
+    const val = githubTokenInput.trim()
+    if (val && !/^[\x20-\x7E]+$/.test(val)) {
+      setGithubTokenError('Токен содержит недопустимые символы. Убедитесь, что скопировали только токен (ghp_...).')
+      return
+    }
+    setGithubTokenError('')
+    setGithubToken(val)
   }
 
   function handleOAuthLogin() {
@@ -347,6 +354,11 @@ export function SettingsPanel({
                 }}
               />
             </div>
+            {githubTokenError && (
+              <div style={{ marginBottom: '8px', fontSize: '12px', color: '#e05050' }}>
+                {githubTokenError}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <Button variant="primary" size="sm" onClick={handleSaveGithubToken}>
                 Сохранить
