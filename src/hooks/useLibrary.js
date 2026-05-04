@@ -99,9 +99,9 @@ export function useLibrary(githubToken) {
         if (!cancelled) markSuccess()
       } catch (err) {
         if (cancelled) return
-        console.error('Cloud sync failed:', err)
+        console.error('Cloud sync failed:', err.message || err)
         setSyncStatus('error')
-        setSyncError(err.message)
+        setSyncError(err.message || String(err))
       }
     }
 
@@ -119,9 +119,9 @@ export function useLibrary(githubToken) {
       await uploadCatalogToGist(githubToken, merged)
       markSuccess()
     } catch (err) {
-      console.error('Sync failed:', err)
+      console.error('Sync failed:', err.message || err)
       setSyncStatus('error')
-      setSyncError(err.message)
+      setSyncError(err.message || String(err))
     }
   }, [githubToken, markSuccess])
 

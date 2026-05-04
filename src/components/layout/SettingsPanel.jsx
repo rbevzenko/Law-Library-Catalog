@@ -78,6 +78,7 @@ export function SettingsPanel({
   const [excelImportResult, setExcelImportResult] = useState(null)
   const [dedupResult, setDedupResult] = useState(null)
   const [csvModalOpen, setCsvModalOpen] = useState(false)
+  const [githubTokenError, setGithubTokenError] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [pinConfirm, setPinConfirm] = useState('')
   const [pinCurrent, setPinCurrent] = useState('')
@@ -90,10 +91,10 @@ export function SettingsPanel({
   const [keyInput, setKeyInput] = useState(anthropicKey || '')
   const [folderInput, setFolderInput] = useState(booksFolder || '')
 
-  // Sync input fields when tokens load asynchronously (e.g. after decryption)
-  useEffect(() => { if (yadiskToken) setTokenInput(yadiskToken) }, [yadiskToken])
-  useEffect(() => { if (githubToken) setGithubTokenInput(githubToken) }, [githubToken])
-  useEffect(() => { if (anthropicKey) setKeyInput(anthropicKey) }, [anthropicKey])
+  // Sync input fields when tokens load asynchronously — only fill if field is currently empty
+  useEffect(() => { if (yadiskToken) setTokenInput(v => v || yadiskToken) }, [yadiskToken])
+  useEffect(() => { if (githubToken) setGithubTokenInput(v => v || githubToken) }, [githubToken])
+  useEffect(() => { if (anthropicKey) setKeyInput(v => v || anthropicKey) }, [anthropicKey])
   const [diskInfo, setDiskInfo] = useState(null)
   const [diskError, setDiskError] = useState('')
   const [checking, setChecking] = useState(false)
@@ -127,7 +128,22 @@ export function SettingsPanel({
   }
 
   function handleSaveGithubToken() {
-    setGithubToken(githubTokenInput.trim())
+    const val = githubTokenInput.trim()
+    if (!val) {
+      setGithubTokenError('')
+      setGithubToken('')
+      return
+    }
+    if (!/^[\x20-\x7E]+$/.test(val)) {
+      setGithubTokenError('Токен содержит недопустимые символы. Скопируйте его заново.')
+      return
+    }
+    if (!val.startsWith('ghp_') && !val.startsWith('gho_')) {
+      setGithubTokenError('Нужен классический токен — он начинается с ghp_. Fine-grained токены (github_pat_...) не поддерживаются.')
+      return
+    }
+    setGithubTokenError('')
+    setGithubToken(val)
   }
 
   function handleOAuthLogin() {
@@ -347,6 +363,11 @@ export function SettingsPanel({
                 }}
               />
             </div>
+            {githubTokenError && (
+              <div style={{ marginBottom: '8px', fontSize: '12px', color: '#e05050' }}>
+                {githubTokenError}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <Button variant="primary" size="sm" onClick={handleSaveGithubToken}>
                 Сохранить
