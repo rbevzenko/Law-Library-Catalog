@@ -25,12 +25,16 @@ async function findCatalogGist(token) {
 export async function downloadCatalogFromGist(token) {
   const gist = await findCatalogGist(token)
   if (!gist) return null
-  const file = gist.files[GIST_FILENAME]
-  if (!file?.raw_url) return null
-  // raw_url is on gist.githubusercontent.com — CORS OK
-  const res = await fetch(file.raw_url)
-  if (!res.ok) throw new Error(`Ошибка загрузки gist: ${res.status}`)
-  return res.json()
+
+  // Fetch full gist via API to get file content — avoids gist.githubusercontent.com
+  const res = await fetch(`${GITHUB_API}/gists/${gist.id}`, { headers: gistHeaders(token) })
+  if (!res.ok) throw new Error(`GitHub API ошибка: ${res.status}`)
+  const fullGist = await res.json()
+
+  const file = fullGist.files[GIST_FILENAME]
+  if (!file?.content) return null
+  if (file.truncated) throw new Error('Каталог слишком большой для GitHub Gist API (>1 МБ).')
+  return JSON.parse(file.content)
 }
 
 export async function uploadCatalogToGist(token, books) {
