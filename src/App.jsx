@@ -484,6 +484,7 @@ export default function App() {
         removeDuplicates={removeDuplicates}
         clearAllBooks={clearAllBooks}
         syncStatus={syncStatus}
+        syncError={syncError}
         lastSyncedAt={lastSyncedAt}
         forceSync={forceSync}
         exportToJSON={handleExportJSON}
