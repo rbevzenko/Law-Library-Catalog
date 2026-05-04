@@ -57,6 +57,7 @@ export function SettingsPanel({
   removeDuplicates,
   clearAllBooks,
   syncStatus,
+  syncError,
   lastSyncedAt,
   forceSync,
   exportToJSON,
@@ -363,7 +364,7 @@ export function SettingsPanel({
             </div>
             {syncStatus === 'error' && (
               <div style={{ marginTop: '10px', padding: '10px 14px', background: 'rgba(200,50,50,0.1)', border: '1px solid rgba(200,50,50,0.3)', borderRadius: '8px', fontSize: '13px', color: '#e05050' }}>
-                Ошибка синхронизации. Проверьте токен и повторите попытку.
+                Ошибка синхронизации: {syncError || 'проверьте токен и повторите попытку.'}
               </div>
             )}
           </section>
