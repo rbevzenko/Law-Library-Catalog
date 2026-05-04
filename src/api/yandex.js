@@ -131,16 +131,26 @@ export async function getPublicUrl(token, path) {
 }
 
 export async function fetchFiles(token, path) {
-  const res = await fetch(
-    `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}&limit=100`,
-    { headers: authHeaders(token) }
-  )
-  if (!res.ok) {
-    throw new Error(`Failed to list files: ${res.status}`)
+  const PAGE_SIZE = 100
+  const items = []
+  let offset = 0
+
+  while (true) {
+    const res = await fetch(
+      `${BASE_URL}/v1/disk/resources?path=${encodeURIComponent(path)}&limit=${PAGE_SIZE}&offset=${offset}`,
+      { headers: authHeaders(token) }
+    )
+    if (!res.ok) throw new Error(`Failed to list files: ${res.status}`)
+    const data = await res.json()
+    const embedded = data._embedded || {}
+    const page = embedded.items || []
+    items.push(...page)
+    const total = embedded.total ?? page.length
+    offset += page.length
+    if (offset >= total || page.length === 0) break
   }
-  const data = await res.json()
-  const items = data._embedded?.items || []
-  return items.map((item) => ({
+
+  return items.map(item => ({
     name: item.name,
     type: item.type,
     size: item.size || 0,
